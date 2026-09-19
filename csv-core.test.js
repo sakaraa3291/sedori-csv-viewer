@@ -1,0 +1,95 @@
+"use strict";
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { normalizeCsv, duplicateCounts, withoutFile } = require("./csv-core.js");
+
+test("multiple CSV rows combine and duplicate ASINs stay present", () => {
+  const first = normalizeCsv("asin,current_price_yen\nA1,1000\nA1,1200\n", "p01.csv");
+  const second = normalizeCsv("asin,current_price_yen\nA1,1300\nB2,2000\n", "p02.csv");
+  const rows = [...first, ...second];
+  assert.equal(rows.length, 4);
+  assert.equal(duplicateCounts(rows).get("A1"), 3);
+});
+
+test("RFC4180 quotes preserve commas, quotes, and embedded newlines", () => {
+  const [row] = normalizeCsv('asin,title,current_price_yen\r\nX,"商品, \"\"特価\"\"\r\n二行目",3000\r\n', "quoted.csv");
+  assert.equal(row.title, '商品, "特価"\r\n二行目');
+  assert.equal(row.line, 2);
+});
+
+test("category rank falls back to sales_rank", () => {
+  const [row] = normalizeCsv("asin,category_rank,sales_rank\nX,,12476\n", "rank.csv");
+  assert.equal(row.categoryRank, "12476");
+});
+
+test("Keepa URL is generated from ASIN and valid supplied URL wins", () => {
+  const [generated] = normalizeCsv("asin\nB000000001\n", "a.csv");
+  const [supplied] = normalizeCsv("asin,keepa_url\nB000000002,https://keepa.com/custom\n", "b.csv");
+  assert.equal(generated.keepaUrl, "https://keepa.com/#!product/5-B000000001");
+  assert.equal(supplied.keepaUrl, "https://keepa.com/custom");
+});
+
+test("missing image stays blank", () => {
+  const [row] = normalizeCsv("asin,image_url\nX,\n", "empty.csv");
+  assert.equal(row.imageUrl, "");
+});
+
+test("UTF-8 BOM and logical row numbers survive embedded newlines", () => {
+  const rows = normalizeCsv('\uFEFFasin,title\r\nA,"one\r\ntwo"\r\nB,last\r\n', "bom.csv");
+  assert.deepEqual(rows.map(row => row.line), [2, 3]);
+  assert.equal(rows[0].asin, "A");
+});
+
+test("blank records and every grade remain, without a row cap", () => {
+  assert.equal(normalizeCsv("asin\n\n", "blank.csv").length, 1);
+  assert.equal(normalizeCsv("asin,grade\n,\n", "blank.csv").length, 1);
+  const rows = normalizeCsv("asin,grade\n" + Array.from({length: 120}, (_, i) =>
+    `A,${["S", "A", "B", "C", "D"][i % 5]}\n`).join(""), "all.csv");
+  assert.equal(rows.length, 120);
+  assert.equal(duplicateCounts(rows).get("A"), 120);
+});
+
+test("syntax and column errors identify file and logical record", () => {
+  for (const tail of ['B,"open', 'B,"closed"x', 'B,b"ad', 'B,too,many']) {
+    assert.throws(() => normalizeCsv('asin,title\nA,"one\ntwo"\n' + tail, "broken.csv"),
+      error => error.line === 3 && error.fileName === "broken.csv"
+        && error.message.includes("broken.csv・論理行3"));
+  }
+});
+
+test("rank prefers category, including zero, and whitespace falls back", () => {
+  const rows = normalizeCsv("asin,category_rank,sales_rank\nA,12,99\nB, ,99\nC,0,99", "rank.csv");
+  assert.deepEqual(rows.map(row => row.categoryRank), ["12", "99", "0"]);
+});
+
+test("image URL passes through and product-page or executable links cannot become Keepa buttons", () => {
+  const [row] = normalizeCsv("asin,image_url,keepa_url\nA,https://example.com/image.jpg,https://amazon.co.jp/dp/A", "image.csv");
+  assert.equal(row.imageUrl, "https://example.com/image.jpg");
+  assert.equal(row.keepaUrl, "https://keepa.com/#!product/5-A");
+  const [unsafe] = normalizeCsv("asin,image_url,keepa_url\nA,javascript:alert(1),javascript:alert(1)", "unsafe.csv");
+  assert.equal(unsafe.imageUrl, "");
+  assert.equal(unsafe.keepaUrl, "https://keepa.com/#!product/5-A");
+});
+
+test("empty files and header-only files import zero rows", () => {
+  assert.equal(normalizeCsv("", "empty.csv").length, 0);
+  assert.equal(normalizeCsv("asin,title\r\n", "header.csv").length, 0);
+});
+
+test("one selected file can be removed without changing rows from other files", () => {
+  const files = [
+    { id: "first", rows: normalizeCsv("asin\nA1\nA1\n", "first.csv") },
+    { id: "second", rows: normalizeCsv("asin\nA1\nB2\n", "second.csv") },
+  ];
+  const remaining = withoutFile(files, "first");
+  assert.deepEqual(remaining[0].rows.map((row) => row.asin), ["A1", "B2"]);
+  assert.equal(files[0].rows.length + files[1].rows.length, 4);
+});
+
+
+test("missing image_url falls back to legacy Amazon image URL for a valid ASIN", () => {
+  const [row] = normalizeCsv("asin,image_url\nB0H3Z6V7WM,\n", "old.csv");
+  assert.equal(row.imageUrl, "https://images-na.ssl-images-amazon.com/images/P/B0H3Z6V7WM.09.LZZZZZZZ.jpg");
+  const [invalid] = normalizeCsv("asin,image_url\nBAD,\n", "old.csv");
+  assert.equal(invalid.imageUrl, "");
+});

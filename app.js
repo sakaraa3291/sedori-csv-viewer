@@ -4,6 +4,10 @@
   const summary = document.querySelector("#summary");
   const errors = document.querySelector("#errors");
   const cards = document.querySelector("#cards");
+  const fileControls = document.querySelector("#file-controls");
+  const selectedFiles = document.querySelector("#selected-files");
+  const clearAll = document.querySelector("#clear-all");
+  let loadedFiles = [];
 
   function readFile(file) {
     return new Promise((resolve, reject) => {
@@ -30,14 +34,18 @@
   function render(rows, files) {
     cards.replaceChildren();
     const duplicates = MobileCsv.duplicateCounts(rows);
-    summary.textContent = `${files.join("、")}｜総取込 ${rows.length.toLocaleString("ja-JP")}行`;
+    summary.textContent = files.length
+      ? `${files.map((file) => file.name).join("、")}｜総取込 ${rows.length.toLocaleString("ja-JP")}行`
+      : "CSVを選択してください";
     const fragment = document.createDocumentFragment();
     rows.forEach((row) => {
       const card = element("article", "card");
       const media = element("div", "media");
       if (row.imageUrl) {
         const img = element("img"); img.src = row.imageUrl; img.alt = row.title || row.asin || "商品画像"; img.loading = "lazy";
-        img.addEventListener("error", () => img.replaceWith(element("div", "placeholder", "画像なし")));
+        const noImage = () => img.replaceWith(element("div", "placeholder", "画像なし"));
+        img.addEventListener("error", noImage);
+        img.addEventListener("load", () => { if (img.naturalWidth <= 2 || img.naturalHeight <= 2) noImage(); });
         media.append(img);
       } else media.append(element("div", "placeholder", "画像なし"));
       const body = element("div", "body");
@@ -61,22 +69,55 @@
     cards.append(fragment);
   }
 
+  function renderState() {
+    const rows = loadedFiles.flatMap((file) => file.rows);
+    selectedFiles.replaceChildren(); errors.replaceChildren();
+    fileControls.hidden = loadedFiles.length === 0;
+    loadedFiles.forEach((file) => {
+      const item = element("li", "file-chip");
+      item.append(element("span", "", file.name));
+      const remove = element("button", "remove-file", "×");
+      remove.type = "button";
+      remove.setAttribute("aria-label", `${file.name}を取り消す`);
+      remove.addEventListener("click", () => {
+        loadedFiles = MobileCsv.withoutFile(loadedFiles, file.id);
+        if (!loadedFiles.length) input.value = "";
+        renderState();
+      });
+      item.append(remove); selectedFiles.append(item);
+      file.errors.forEach((message) => errors.append(element("li", "", message)));
+    });
+    render(rows, loadedFiles);
+  }
+
+  function reset() {
+    loadedFiles = [];
+    input.value = "";
+    renderState();
+  }
+
+  clearAll.addEventListener("click", reset);
+
   input.addEventListener("change", async () => {
     const files = Array.from(input.files || []);
+    if (!files.length) return;
     input.disabled = true;
-    errors.replaceChildren(); summary.textContent = "読み込み中…"; cards.replaceChildren();
-    const allRows = [], names = [];
-    for (const file of files) {
-      names.push(file.name);
+    loadedFiles = [];
+    errors.replaceChildren(); selectedFiles.replaceChildren(); fileControls.hidden = true;
+    summary.textContent = "読み込み中…"; cards.replaceChildren();
+    for (const [index, file] of files.entries()) {
+      const id = `${Date.now()}-${index}`;
+      const entry = { id, name: file.name, rows: [], errors: [] };
       try {
-        for (const row of MobileCsv.normalizeCsv(await readFile(file), file.name)) allRows.push(row);
+        entry.rows = MobileCsv.normalizeCsv(await readFile(file), file.name);
       }
       catch (error) {
-        errors.append(element("li", "", error.fileName ? error.message
-          : `${file.name}・論理行1（読込開始）: ${error.message || "CSV読込エラー"}`));
+        entry.errors.push(error.fileName ? error.message
+          : `${file.name}・論理行1（読込開始）: ${error.message || "CSV読込エラー"}`);
       }
+      loadedFiles.push(entry);
     }
-    render(allRows, names);
+    renderState();
     input.disabled = false;
   });
 })();

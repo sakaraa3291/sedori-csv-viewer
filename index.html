@@ -13,6 +13,10 @@
     <label class="picker" for="csv-files">CSVをまとめて選択</label>
     <input id="csv-files" type="file" multiple accept=".csv,text/csv">
     <p id="summary" aria-live="polite">CSVを選択してください</p>
+    <div id="file-controls" hidden>
+      <ul id="selected-files" aria-label="選択中のCSV"></ul>
+      <button id="clear-all" type="button">全部取り消す</button>
+    </div>
     <ul id="errors" class="errors" aria-live="assertive"></ul>
   </header>
   <main id="cards"></main>

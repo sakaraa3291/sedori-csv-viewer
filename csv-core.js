@@ -73,13 +73,16 @@
       const asin = (raw.asin || "").trim();
       const suppliedKeepa = (raw.keepa_url || "").trim();
       const image = (raw.image_url || "").trim();
+      const fallbackImage = /^[A-Z0-9]{10}$/.test(asin)
+        ? `https://images-na.ssl-images-amazon.com/images/P/${asin}.09.LZZZZZZZ.jpg`
+        : "";
       rows.push({
         asin,
         currentPriceYen: (raw.current_price_yen || "").trim(),
         categoryRank: ((raw.category_rank || "").trim() || (raw.sales_rank || "").trim()),
         grade: (raw.grade || "").trim().toUpperCase(),
         title: (raw.title || "").trim(),
-        imageUrl: /^https?:\/\//i.test(image) ? image : "",
+        imageUrl: /^https?:\/\//i.test(image) ? image : fallbackImage,
         keepaUrl: /^https:\/\/(?:www\.)?keepa\.com\//i.test(suppliedKeepa)
           ? suppliedKeepa
           : (asin ? `https://keepa.com/#!product/5-${encodeURIComponent(asin)}` : ""),
@@ -106,5 +109,9 @@
     return counts;
   }
 
-  return { CsvError, parseCsv, normalizeCsv, duplicateCounts };
+  function withoutFile(files, fileId) {
+    return files.filter((file) => file.id !== fileId);
+  }
+
+  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, withoutFile };
 });
