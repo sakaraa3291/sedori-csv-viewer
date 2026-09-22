@@ -11,6 +11,103 @@
   const procurementFilter = document.querySelector("#procurement-filter");
   const categoryFilter = document.querySelector("#category-filter");
   let loadedFiles = [];
+  let persistTimer = null;
+  let restoreComplete = false;
+  const DB_NAME = "sedori-csv-card";
+  const DB_STORE = "state";
+  const DB_KEY = "current-session";
+  const VIEW_KEY = "sedori-csv-card-view";
+
+  function openStateDb() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains(DB_STORE)) request.result.createObjectStore(DB_STORE);
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("保存領域を開けません"));
+    });
+  }
+
+  async function readPersistedFiles() {
+    const db = await openStateDb();
+    try {
+      return await new Promise((resolve, reject) => {
+        const request = db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get(DB_KEY);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error || new Error("保存データを読めません"));
+      });
+    } finally { db.close(); }
+  }
+
+  async function writePersistedFiles() {
+    const db = await openStateDb();
+    try {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, "readwrite");
+        tx.objectStore(DB_STORE).put({ loadedFiles, savedAt: Date.now() }, DB_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error("保存に失敗しました"));
+      });
+    } finally { db.close(); }
+  }
+
+  async function deletePersistedFiles() {
+    const db = await openStateDb();
+    try {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, "readwrite");
+        tx.objectStore(DB_STORE).delete(DB_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error("保存データを削除できません"));
+      });
+    } finally { db.close(); }
+  }
+
+  function readViewState() {
+    try {
+      const value = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
+      return value && typeof value === "object" ? value : {};
+    } catch (_) { return {}; }
+  }
+
+  function writeViewState() {
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify({
+        procurement: procurementFilter.value || "__ALL__",
+        category: categoryFilter.value || "__ALL__",
+        scrollY: Math.max(0, Math.round(window.scrollY || 0)),
+      }));
+    } catch (_) { /* Safari private mode/storage failure: continue without view restore. */ }
+  }
+
+  function schedulePersist() {
+    window.clearTimeout(persistTimer);
+    persistTimer = window.setTimeout(() => {
+      writeViewState();
+      writePersistedFiles().catch(() => {});
+    }, 120);
+  }
+
+  async function restorePersistedState() {
+    const view = readViewState();
+    try {
+      const saved = await readPersistedFiles();
+      if (saved && Array.isArray(saved.loadedFiles)) loadedFiles = saved.loadedFiles;
+    } catch (_) { loadedFiles = []; }
+    renderState();
+    const rows = loadedFiles.flatMap((file) => file.rows);
+    if (Array.from(procurementFilter.options).some((option) => option.value === view.procurement)) {
+      procurementFilter.value = view.procurement;
+    }
+    if (Array.from(categoryFilter.options).some((option) => option.value === view.category)) {
+      categoryFilter.value = view.category;
+    }
+    render(rows, loadedFiles);
+    if (Number.isFinite(view.scrollY) && view.scrollY > 0) {
+      requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, view.scrollY)));
+    }
+  }
 
   function readFile(file) {
     return new Promise((resolve, reject) => {
@@ -160,6 +257,7 @@
         loadedFiles = MobileCsv.withoutFile(loadedFiles, file.id);
         if (!loadedFiles.length) input.value = "";
         renderState();
+        schedulePersist();
       });
       item.append(remove); selectedFiles.append(item);
       file.errors.forEach((message) => errors.append(element("li", "", message)));
@@ -171,12 +269,15 @@
     loadedFiles = [];
     input.value = "";
     renderState();
+    try { localStorage.removeItem(VIEW_KEY); } catch (_) {}
+    deletePersistedFiles().catch(() => {});
   }
 
   clearAll.addEventListener("click", reset);
   [procurementFilter, categoryFilter].forEach((filter) => filter.addEventListener("change", () => {
     const rows = loadedFiles.flatMap((file) => file.rows);
     render(rows, loadedFiles);
+    writeViewState();
   }));
 
   input.addEventListener("change", async () => {
@@ -199,6 +300,31 @@
       loadedFiles.push(entry);
     }
     renderState();
+    await writePersistedFiles().catch(() => {});
+    writeViewState();
     input.disabled = false;
   });
+
+  let lastScrollSave = 0;
+  window.addEventListener("scroll", () => {
+    if (!restoreComplete) return;
+    const now = Date.now();
+    if (now - lastScrollSave >= 250) {
+      lastScrollSave = now;
+      writeViewState();
+    }
+  }, { passive: true });
+  window.addEventListener("pagehide", () => {
+    writeViewState();
+    writePersistedFiles().catch(() => {});
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      writeViewState();
+      writePersistedFiles().catch(() => {});
+    }
+  });
+
+  summary.textContent = "前回の表示を復元中…";
+  restorePersistedState().catch(() => renderState()).finally(() => { restoreComplete = true; });
 })();
