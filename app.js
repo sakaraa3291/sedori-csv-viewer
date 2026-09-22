@@ -66,6 +66,13 @@
       badges.append(element("div", "category-badge procurement-badge", row.procurementCategory || "未分類"));
       if (row.category && row.category !== "未分類") badges.append(element("div", "category-badge source-category", row.category));
       body.append(badges);
+      if (row.recommendedStores && row.recommendedStores.length) {
+        const stores = element("div", "store-candidates");
+        stores.append(element("div", "store-label", "仕入れ店舗候補"));
+        const chips = element("div", "store-chips");
+        row.recommendedStores.forEach((store) => chips.append(element("span", "store-chip", store)));
+        stores.append(chips); body.append(stores);
+      }
       const facts = element("div", "facts");
       facts.append(element("div", "fact", `現在価格 ${numberText(row.currentPriceYen, "円")}`));
       facts.append(element("div", "fact", `ランキング ${numberText(row.categoryRank, "位")}`));

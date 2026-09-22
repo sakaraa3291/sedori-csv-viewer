@@ -40,3 +40,8 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 .category-badges { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 5px; }
 .procurement-badge { background: #1d4ed8; color: #eff6ff; }
 .source-category { background: #1e293b; color: #bfdbfe; font-weight: 600; }
+
+.store-candidates { margin: 6px 0 8px; }
+.store-label { margin-bottom: 5px; color: #cbd5e1; font-size: .72rem; font-weight: 700; }
+.store-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.store-chip { display: inline-flex; align-items: center; min-height: 25px; padding: 3px 7px; border-radius: 8px; background: #163047; color: #dbeafe; font-size: .72rem; font-weight: 700; }

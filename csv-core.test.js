@@ -136,3 +136,29 @@ test("combined sourcing and Amazon category filters work together", () => {
     { category: "家電", count: 2 }, { category: "美容", count: 1 }, { category: "食品", count: 1 },
   ]);
 });
+
+test("sourcing categories provide deterministic store candidates", () => {
+  assert.deepEqual(MobileCsv.recommendedStores("家電"), [
+    "ヤマダデンキ", "エディオン", "ケーズデンキ", "ジョーシン", "ドン・キホーテ",
+  ]);
+  assert.deepEqual(MobileCsv.recommendedStores("DIY・工具"), [
+    "コーナン", "DCM", "コメリ", "カインズ", "ナフコ",
+  ]);
+  assert.deepEqual(MobileCsv.recommendedStores("不明カテゴリー"), [
+    "ドン・キホーテ", "トライアル", "ホームセンター", "ドラッグストア", "家電量販店",
+  ]);
+});
+
+test("CSV can explicitly override recommended store candidates", () => {
+  const [row] = normalizeCsv(
+    "asin,category,推奨仕入れ店舗\nA,Electronics,店舗A｜店舗B、店舗C\n", "stores.csv");
+  assert.deepEqual(row.recommendedStores, ["店舗A", "店舗B", "店舗C"]);
+});
+
+test("normalized rows receive store candidates from sourcing category", () => {
+  const rows = normalizeCsv("asin,category\nA,Beauty\nB,Grocery\n", "stores.csv");
+  assert.equal(rows[0].procurementCategory, "美容");
+  assert.ok(rows[0].recommendedStores.includes("スギ薬局"));
+  assert.equal(rows[1].procurementCategory, "食品");
+  assert.ok(rows[1].recommendedStores.includes("トライアル"));
+});

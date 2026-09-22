@@ -88,6 +88,30 @@
     return "その他";
   }
 
+  const STORE_CANDIDATES = {
+    "家電": ["ヤマダデンキ", "エディオン", "ケーズデンキ", "ジョーシン", "ドン・キホーテ"],
+    "美容": ["マツキヨココカラ", "スギ薬局", "ウエルシア", "コスモス", "ドン・キホーテ"],
+    "ドラッグストア": ["コスモス", "スギ薬局", "ウエルシア", "マツキヨココカラ", "ドン・キホーテ"],
+    "食品": ["トライアル", "コストコ", "イオン系", "スーパー", "ドン・キホーテ"],
+    "日用品": ["トライアル", "ドン・キホーテ", "ホームセンター", "ドラッグストア", "イオン系"],
+    "DIY・工具": ["コーナン", "DCM", "コメリ", "カインズ", "ナフコ"],
+    "ホビー": ["ジョーシン", "エディオン", "ヤマダデンキ", "トイザらス", "ドン・キホーテ"],
+    "ベビー": ["西松屋", "アカチャンホンポ", "ベビーザらス", "ドラッグストア", "イオン系"],
+    "ペット": ["ホームセンター", "ペット専門店", "イオン系", "トライアル", "ドン・キホーテ"],
+    "スポーツ": ["スポーツデポ", "ゼビオ", "ヒマラヤ", "アルペン", "ドン・キホーテ"],
+    "ファッション": ["しまむら", "イオン系", "ドン・キホーテ", "アウトレット", "ABC-MART"],
+    "自動車": ["オートバックス", "イエローハット", "ジェームス", "ホームセンター", "ドン・キホーテ"],
+    "メディア・ゲーム": ["ゲオ", "ブックオフ", "ヤマダデンキ", "エディオン", "ジョーシン"],
+    "その他": ["ドン・キホーテ", "トライアル", "ホームセンター", "イオン系", "地方店"],
+    "未分類": ["ドン・キホーテ", "トライアル", "ホームセンター", "ドラッグストア", "家電量販店"],
+  };
+
+  function recommendedStores(procurement, explicit) {
+    const chosen = String(explicit || "").trim();
+    if (chosen) return chosen.split(/[|｜、,]/).map((value) => value.trim()).filter(Boolean);
+    return (STORE_CANDIDATES[procurement] || STORE_CANDIDATES["未分類"]).slice();
+  }
+
   function normalizeRows(text, fileName) {
     const parsed = parseCsv(text);
     if (!parsed.length) return [];
@@ -109,6 +133,8 @@
       const category = (raw.category || raw["カテゴリー"] || raw["カテゴリ"] ||
         raw.product_category || raw.product_group || raw.productGroup || "").trim() || "未分類";
       const explicitProcurement = (raw.procurement_category || raw["仕入れカテゴリー"] || raw["大分類"] || "").trim();
+      const procurement = procurementCategory(category, explicitProcurement);
+      const explicitStores = (raw.recommended_stores || raw["推奨仕入れ店舗"] || raw["仕入れ店舗候補"] || "").trim();
       rows.push({
         asin,
         currentPriceYen: (raw.current_price_yen || "").trim(),
@@ -116,7 +142,8 @@
         grade: (raw.grade || "").trim().toUpperCase(),
         title: (raw.title || "").trim(),
         category,
-        procurementCategory: procurementCategory(category, explicitProcurement),
+        procurementCategory: procurement,
+        recommendedStores: recommendedStores(procurement, explicitStores),
         imageUrl: /^https?:\/\//i.test(image) ? image : fallbackImage,
         keepaUrl: /^https:\/\/(?:www\.)?keepa\.com\//i.test(suppliedKeepa)
           ? suppliedKeepa
@@ -175,5 +202,5 @@
     return files.filter((file) => file.id !== fileId);
   }
 
-  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, withoutFile };
+  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, withoutFile };
 });
