@@ -110,3 +110,29 @@ test("category counts and filtering keep all rows intact", () => {
   assert.equal(MobileCsv.filterByCategory(rows, "__ALL__").length, 4);
   assert.equal(rows.length, 4);
 });
+
+test("Amazon categories map to sourcing-friendly broad categories", () => {
+  const cases = [
+    ["Electronics", "家電"], ["Beauty", "美容"], ["Health and Beauty", "ドラッグストア"],
+    ["Grocery", "食品"], ["Kitchen", "日用品"], ["Home Improvement", "DIY・工具"],
+    ["Toys", "ホビー"], ["Baby Product", "ベビー"], ["Pet Products", "ペット"],
+    ["Sports", "スポーツ"], ["Apparel", "ファッション"], ["Automotive", "自動車"],
+    ["Video Games", "メディア・ゲーム"], ["Something Unknown", "その他"], ["", "未分類"],
+  ];
+  for (const [input, expected] of cases) assert.equal(MobileCsv.procurementCategory(input), expected, input);
+});
+
+test("explicit sourcing category overrides automatic mapping", () => {
+  const [row] = normalizeCsv("asin,category,仕入れカテゴリー\nA,Electronics,重点家電\n", "override.csv");
+  assert.equal(row.category, "Electronics");
+  assert.equal(row.procurementCategory, "重点家電");
+});
+
+test("combined sourcing and Amazon category filters work together", () => {
+  const rows = normalizeCsv("asin,category\nA,Electronics\nB,Beauty\nC,Camera\nD,Grocery\n", "filters.csv");
+  assert.deepEqual(MobileCsv.filterRows(rows, "家電", "__ALL__").map(row => row.asin), ["A", "C"]);
+  assert.deepEqual(MobileCsv.filterRows(rows, "家電", "Camera").map(row => row.asin), ["C"]);
+  assert.deepEqual(MobileCsv.categoryCounts(rows, "procurementCategory"), [
+    { category: "家電", count: 2 }, { category: "美容", count: 1 }, { category: "食品", count: 1 },
+  ]);
+});

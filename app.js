@@ -8,6 +8,7 @@
   const selectedFiles = document.querySelector("#selected-files");
   const clearAll = document.querySelector("#clear-all");
   const categoryControls = document.querySelector("#category-controls");
+  const procurementFilter = document.querySelector("#procurement-filter");
   const categoryFilter = document.querySelector("#category-filter");
   let loadedFiles = [];
 
@@ -35,12 +36,12 @@
 
   function render(rows, files) {
     cards.replaceChildren();
-    const visibleRows = MobileCsv.filterByCategory(rows, categoryFilter.value);
+    const visibleRows = MobileCsv.filterRows(rows, procurementFilter.value, categoryFilter.value);
     const duplicates = MobileCsv.duplicateCounts(rows);
-    const selected = categoryFilter.value;
+    const filtered = procurementFilter.value !== "__ALL__" || categoryFilter.value !== "__ALL__";
     summary.textContent = files.length
       ? `${files.map((file) => file.name).join("、")}｜総取込 ${rows.length.toLocaleString("ja-JP")}行` +
-        (selected === "__ALL__" ? "" : `｜表示 ${visibleRows.length.toLocaleString("ja-JP")}行`)
+        (filtered ? `｜表示 ${visibleRows.length.toLocaleString("ja-JP")}行` : "")
       : "CSVを選択してください";
     const fragment = document.createDocumentFragment();
     visibleRows.forEach((row) => {
@@ -61,7 +62,10 @@
       if (duplicate > 1) top.append(element("small", "duplicate", `重複 ${duplicate}件`));
       body.append(top);
       if (row.title) body.append(element("div", "title", row.title));
-      body.append(element("div", "category-badge", row.category || "未分類"));
+      const badges = element("div", "category-badges");
+      badges.append(element("div", "category-badge procurement-badge", row.procurementCategory || "未分類"));
+      if (row.category && row.category !== "未分類") badges.append(element("div", "category-badge source-category", row.category));
+      body.append(badges);
       const facts = element("div", "facts");
       facts.append(element("div", "fact", `現在価格 ${numberText(row.currentPriceYen, "円")}`));
       facts.append(element("div", "fact", `ランキング ${numberText(row.categoryRank, "位")}`));
@@ -79,15 +83,23 @@
     const rows = loadedFiles.flatMap((file) => file.rows);
     selectedFiles.replaceChildren(); errors.replaceChildren();
     fileControls.hidden = loadedFiles.length === 0;
-    const counts = MobileCsv.categoryCounts(rows);
-    const current = categoryFilter.value;
-    categoryFilter.replaceChildren();
-    const all = element("option", "", `全カテゴリー（${rows.length}）`); all.value = "__ALL__"; categoryFilter.append(all);
-    counts.forEach(({ category, count }) => {
+    const procurementCounts = MobileCsv.categoryCounts(rows, "procurementCategory");
+    const categoryCounts = MobileCsv.categoryCounts(rows, "category");
+    const currentProcurement = procurementFilter.value;
+    const currentCategory = categoryFilter.value;
+    procurementFilter.replaceChildren(); categoryFilter.replaceChildren();
+    const allProcurement = element("option", "", `全カテゴリー（${rows.length}）`); allProcurement.value = "__ALL__"; procurementFilter.append(allProcurement);
+    procurementCounts.forEach(({ category, count }) => {
+      const option = element("option", "", `${category}（${count}）`); option.value = category; procurementFilter.append(option);
+    });
+    const allCategory = element("option", "", `全Amazonカテゴリー（${rows.length}）`); allCategory.value = "__ALL__"; categoryFilter.append(allCategory);
+    categoryCounts.forEach(({ category, count }) => {
       const option = element("option", "", `${category}（${count}）`); option.value = category; categoryFilter.append(option);
     });
-    const values = new Set(["__ALL__", ...counts.map((item) => item.category)]);
-    categoryFilter.value = values.has(current) ? current : "__ALL__";
+    const procurementValues = new Set(["__ALL__", ...procurementCounts.map((item) => item.category)]);
+    const categoryValues = new Set(["__ALL__", ...categoryCounts.map((item) => item.category)]);
+    procurementFilter.value = procurementValues.has(currentProcurement) ? currentProcurement : "__ALL__";
+    categoryFilter.value = categoryValues.has(currentCategory) ? currentCategory : "__ALL__";
     categoryControls.hidden = rows.length === 0;
     loadedFiles.forEach((file) => {
       const item = element("li", "file-chip");
@@ -113,10 +125,10 @@
   }
 
   clearAll.addEventListener("click", reset);
-  categoryFilter.addEventListener("change", () => {
+  [procurementFilter, categoryFilter].forEach((filter) => filter.addEventListener("change", () => {
     const rows = loadedFiles.flatMap((file) => file.rows);
     render(rows, loadedFiles);
-  });
+  }));
 
   input.addEventListener("change", async () => {
     const files = Array.from(input.files || []);

@@ -58,6 +58,36 @@
     return rows;
   }
 
+  const PROCUREMENT_ORDER = [
+    "家電", "美容", "ドラッグストア", "食品", "日用品", "DIY・工具",
+    "ホビー", "ベビー", "ペット", "スポーツ", "ファッション",
+    "自動車", "メディア・ゲーム", "その他", "未分類",
+  ];
+
+  function procurementCategory(category, explicit) {
+    const chosen = String(explicit || "").trim();
+    if (chosen) return chosen;
+    const original = String(category || "").trim();
+    if (!original || original === "未分類") return "未分類";
+    const value = original.toLowerCase().replace(/[\s_&/・-]+/g, " ");
+    const has = (...words) => words.some((word) => value.includes(word));
+
+    if (has("baby", "ベビー", "乳幼児")) return "ベビー";
+    if (has("pet", "ペット", "犬用品", "猫用品")) return "ペット";
+    if (has("grocery", "gourmet food", "food and beverage", "食品", "飲料", "お菓子")) return "食品";
+    if (has("drugstore", "health and beauty", "health care", "healthcare", "ドラッグ", "ヘルスケア", "衛生")) return "ドラッグストア";
+    if (has("beauty", "luxury beauty", "personal care appliance", "美容", "コスメ", "化粧")) return "美容";
+    if (has("video game", "software", "book", "dvd", "music", "movie", "ゲーム", "書籍", "dvd", "音楽")) return "メディア・ゲーム";
+    if (has("electronics", "consumer electronics", "camera", "wireless", "personal computer", "computer", "major appliance", "家電", "パソコン", "カメラ", "テレビ")) return "家電";
+    if (has("home improvement", "tools", "tool", "biss", "hardware", "diy", "工具", "資材")) return "DIY・工具";
+    if (has("kitchen", "home", "office product", "lawn and garden", "household", "日用品", "キッチン", "文房具", "オフィス")) return "日用品";
+    if (has("toys", "toy", "hobby", "collectible", "ホビー", "おもちゃ", "玩具")) return "ホビー";
+    if (has("sports", "outdoors", "sporting goods", "スポーツ", "アウトドア")) return "スポーツ";
+    if (has("apparel", "shoes", "jewelry", "watch", "luggage", "服", "靴", "ジュエリー", "時計", "バッグ")) return "ファッション";
+    if (has("automotive", "car", "カー用品", "自動車")) return "自動車";
+    return "その他";
+  }
+
   function normalizeRows(text, fileName) {
     const parsed = parseCsv(text);
     if (!parsed.length) return [];
@@ -76,14 +106,17 @@
       const fallbackImage = /^[A-Z0-9]{10}$/.test(asin)
         ? `https://images-na.ssl-images-amazon.com/images/P/${asin}.09.LZZZZZZZ.jpg`
         : "";
+      const category = (raw.category || raw["カテゴリー"] || raw["カテゴリ"] ||
+        raw.product_category || raw.product_group || raw.productGroup || "").trim() || "未分類";
+      const explicitProcurement = (raw.procurement_category || raw["仕入れカテゴリー"] || raw["大分類"] || "").trim();
       rows.push({
         asin,
         currentPriceYen: (raw.current_price_yen || "").trim(),
         categoryRank: ((raw.category_rank || "").trim() || (raw.sales_rank || "").trim()),
         grade: (raw.grade || "").trim().toUpperCase(),
         title: (raw.title || "").trim(),
-        category: (raw.category || raw["カテゴリー"] || raw["カテゴリ"] ||
-          raw.product_category || raw.product_group || raw.productGroup || "").trim() || "未分類",
+        category,
+        procurementCategory: procurementCategory(category, explicitProcurement),
         imageUrl: /^https?:\/\//i.test(image) ? image : fallbackImage,
         keepaUrl: /^https:\/\/(?:www\.)?keepa\.com\//i.test(suppliedKeepa)
           ? suppliedKeepa
@@ -111,24 +144,36 @@
     return counts;
   }
 
-  function categoryCounts(rows) {
+  function categoryCounts(rows, field = "category") {
     const counts = new Map();
     rows.forEach((row) => {
-      const category = row.category || "未分類";
+      const category = row[field] || "未分類";
       counts.set(category, (counts.get(category) || 0) + 1);
     });
+    const order = new Map(PROCUREMENT_ORDER.map((value, index) => [value, index]));
     return Array.from(counts, ([category, count]) => ({ category, count }))
-      .sort((a, b) => a.category.localeCompare(b.category, "ja"));
+      .sort((a, b) => field === "procurementCategory"
+        ? (order.get(a.category) ?? 999) - (order.get(b.category) ?? 999) || a.category.localeCompare(b.category, "ja")
+        : a.category.localeCompare(b.category, "ja"));
+  }
+
+  function filterRows(rows, procurement, category) {
+    return rows.filter((row) => {
+      const procurementOk = !procurement || procurement === "__ALL__" ||
+        (row.procurementCategory || "未分類") === procurement;
+      const categoryOk = !category || category === "__ALL__" ||
+        (row.category || "未分類") === category;
+      return procurementOk && categoryOk;
+    });
   }
 
   function filterByCategory(rows, category) {
-    if (!category || category === "__ALL__") return rows.slice();
-    return rows.filter((row) => (row.category || "未分類") === category);
+    return filterRows(rows, "__ALL__", category);
   }
 
   function withoutFile(files, fileId) {
     return files.filter((file) => file.id !== fileId);
   }
 
-  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterByCategory, withoutFile };
+  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, withoutFile };
 });
