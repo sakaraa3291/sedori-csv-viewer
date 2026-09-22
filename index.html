@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#101827">
   <title>せどりCSVカード</title>
-  <link rel="stylesheet" href="style.css?v=20260920-2">
+  <link rel="stylesheet" href="style.css?v=20260922-1">
 </head>
 <body>
   <header>
@@ -13,6 +13,12 @@
     <label class="picker" for="csv-files">CSVをまとめて選択</label>
     <input id="csv-files" type="file" multiple accept=".csv,text/csv">
     <p id="summary" aria-live="polite">CSVを選択してください</p>
+    <div id="category-controls" hidden>
+      <label for="category-filter">カテゴリー</label>
+      <select id="category-filter" aria-label="カテゴリーで絞り込み">
+        <option value="__ALL__">全カテゴリー</option>
+      </select>
+    </div>
     <div id="file-controls" hidden>
       <ul id="selected-files" aria-label="選択中のCSV"></ul>
       <button id="clear-all" type="button">全部取り消す</button>
@@ -20,7 +26,7 @@
     <ul id="errors" class="errors" aria-live="assertive"></ul>
   </header>
   <main id="cards"></main>
-  <script src="csv-core.js?v=20260920-2"></script>
-  <script src="app.js?v=20260920-2"></script>
+  <script src="csv-core.js?v=20260922-1"></script>
+  <script src="app.js?v=20260922-1"></script>
 </body>
 </html>

@@ -7,6 +7,8 @@
   const fileControls = document.querySelector("#file-controls");
   const selectedFiles = document.querySelector("#selected-files");
   const clearAll = document.querySelector("#clear-all");
+  const categoryControls = document.querySelector("#category-controls");
+  const categoryFilter = document.querySelector("#category-filter");
   let loadedFiles = [];
 
   function readFile(file) {
@@ -33,12 +35,15 @@
 
   function render(rows, files) {
     cards.replaceChildren();
+    const visibleRows = MobileCsv.filterByCategory(rows, categoryFilter.value);
     const duplicates = MobileCsv.duplicateCounts(rows);
+    const selected = categoryFilter.value;
     summary.textContent = files.length
-      ? `${files.map((file) => file.name).join("、")}｜総取込 ${rows.length.toLocaleString("ja-JP")}行`
+      ? `${files.map((file) => file.name).join("、")}｜総取込 ${rows.length.toLocaleString("ja-JP")}行` +
+        (selected === "__ALL__" ? "" : `｜表示 ${visibleRows.length.toLocaleString("ja-JP")}行`)
       : "CSVを選択してください";
     const fragment = document.createDocumentFragment();
-    rows.forEach((row) => {
+    visibleRows.forEach((row) => {
       const card = element("article", "card");
       const media = element("div", "media");
       if (row.imageUrl) {
@@ -56,6 +61,7 @@
       if (duplicate > 1) top.append(element("small", "duplicate", `重複 ${duplicate}件`));
       body.append(top);
       if (row.title) body.append(element("div", "title", row.title));
+      body.append(element("div", "category-badge", row.category || "未分類"));
       const facts = element("div", "facts");
       facts.append(element("div", "fact", `現在価格 ${numberText(row.currentPriceYen, "円")}`));
       facts.append(element("div", "fact", `ランキング ${numberText(row.categoryRank, "位")}`));
@@ -73,6 +79,16 @@
     const rows = loadedFiles.flatMap((file) => file.rows);
     selectedFiles.replaceChildren(); errors.replaceChildren();
     fileControls.hidden = loadedFiles.length === 0;
+    const counts = MobileCsv.categoryCounts(rows);
+    const current = categoryFilter.value;
+    categoryFilter.replaceChildren();
+    const all = element("option", "", `全カテゴリー（${rows.length}）`); all.value = "__ALL__"; categoryFilter.append(all);
+    counts.forEach(({ category, count }) => {
+      const option = element("option", "", `${category}（${count}）`); option.value = category; categoryFilter.append(option);
+    });
+    const values = new Set(["__ALL__", ...counts.map((item) => item.category)]);
+    categoryFilter.value = values.has(current) ? current : "__ALL__";
+    categoryControls.hidden = rows.length === 0;
     loadedFiles.forEach((file) => {
       const item = element("li", "file-chip");
       item.append(element("span", "", file.name));
@@ -97,6 +113,10 @@
   }
 
   clearAll.addEventListener("click", reset);
+  categoryFilter.addEventListener("change", () => {
+    const rows = loadedFiles.flatMap((file) => file.rows);
+    render(rows, loadedFiles);
+  });
 
   input.addEventListener("change", async () => {
     const files = Array.from(input.files || []);

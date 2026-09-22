@@ -93,3 +93,20 @@ test("missing image_url falls back to legacy Amazon image URL for a valid ASIN",
   const [invalid] = normalizeCsv("asin,image_url\nBAD,\n", "old.csv");
   assert.equal(invalid.imageUrl, "");
 });
+
+test("category aliases normalize and missing values become 未分類", () => {
+  const rows = normalizeCsv("asin,category,カテゴリー,カテゴリ,product_group\nA,Beauty,,,\nB,,家電,,\nC,,,食品,\nD,,,,Toy\nE,,,,\n", "category.csv");
+  assert.deepEqual(rows.map(row => row.category), ["Beauty", "家電", "食品", "Toy", "未分類"]);
+});
+
+test("category counts and filtering keep all rows intact", () => {
+  const rows = normalizeCsv("asin,category\nA,家電\nB,食品\nC,家電\nD,\n", "category.csv");
+  assert.deepEqual(MobileCsv.categoryCounts(rows), [
+    { category: "家電", count: 2 },
+    { category: "食品", count: 1 },
+    { category: "未分類", count: 1 },
+  ]);
+  assert.deepEqual(MobileCsv.filterByCategory(rows, "家電").map(row => row.asin), ["A", "C"]);
+  assert.equal(MobileCsv.filterByCategory(rows, "__ALL__").length, 4);
+  assert.equal(rows.length, 4);
+});

@@ -82,6 +82,8 @@
         categoryRank: ((raw.category_rank || "").trim() || (raw.sales_rank || "").trim()),
         grade: (raw.grade || "").trim().toUpperCase(),
         title: (raw.title || "").trim(),
+        category: (raw.category || raw["カテゴリー"] || raw["カテゴリ"] ||
+          raw.product_category || raw.product_group || raw.productGroup || "").trim() || "未分類",
         imageUrl: /^https?:\/\//i.test(image) ? image : fallbackImage,
         keepaUrl: /^https:\/\/(?:www\.)?keepa\.com\//i.test(suppliedKeepa)
           ? suppliedKeepa
@@ -109,9 +111,24 @@
     return counts;
   }
 
+  function categoryCounts(rows) {
+    const counts = new Map();
+    rows.forEach((row) => {
+      const category = row.category || "未分類";
+      counts.set(category, (counts.get(category) || 0) + 1);
+    });
+    return Array.from(counts, ([category, count]) => ({ category, count }))
+      .sort((a, b) => a.category.localeCompare(b.category, "ja"));
+  }
+
+  function filterByCategory(rows, category) {
+    if (!category || category === "__ALL__") return rows.slice();
+    return rows.filter((row) => (row.category || "未分類") === category);
+  }
+
   function withoutFile(files, fileId) {
     return files.filter((file) => file.id !== fileId);
   }
 
-  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, withoutFile };
+  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterByCategory, withoutFile };
 });
