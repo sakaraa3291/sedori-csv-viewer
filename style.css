@@ -24,6 +24,10 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 .grade { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: #475569; font-size: 1.55rem; color: white; }
 .grade-S { background: #dc2626; } .grade-A { background: #ea580c; } .grade-B { background: #ca8a04; } .grade-C { background: #0284c7; } .grade-D { background: #64748b; }
 .asin { font: 700 .95rem ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.code-row { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
+.jan { min-width: 0; flex: 1; font: 700 .88rem ui-monospace, SFMono-Regular, Menlo, monospace; color: #e2e8f0; overflow-wrap: anywhere; }
+.copy-jan { min-width: 74px; min-height: 44px; border: 1px solid #475569; border-radius: 10px; background: #243247; color: #f8fafc; font: inherit; font-weight: 700; cursor: pointer; }
+.copy-jan.copied { background: #166534; border-color: #22c55e; }
 .duplicate { color: #fbbf24; }
 .title { margin: 8px 0; color: #cbd5e1; font-size: .84rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .facts { display: grid; gap: 3px; margin: 8px 0; font-weight: 700; }

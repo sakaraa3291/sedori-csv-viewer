@@ -124,7 +124,8 @@
       }
       const raw = Object.create(null);
       headers.forEach((key, index) => { if (key) raw[key] = entry.values[index]; });
-      const asin = (raw.asin || "").trim();
+      const asin = (raw.asin || raw.ASIN || "").trim();
+      const jan = (raw.jan || raw.JAN || raw.jan_code || raw["JANコード"] || raw.ean || raw.EAN || "").trim();
       const suppliedKeepa = (raw.keepa_url || "").trim();
       const image = (raw.image_url || "").trim();
       const fallbackImage = /^[A-Z0-9]{10}$/.test(asin)
@@ -137,6 +138,7 @@
       const explicitStores = (raw.recommended_stores || raw["推奨仕入れ店舗"] || raw["仕入れ店舗候補"] || "").trim();
       rows.push({
         asin,
+        jan,
         currentPriceYen: (raw.current_price_yen || "").trim(),
         categoryRank: ((raw.category_rank || "").trim() || (raw.sales_rank || "").trim()),
         grade: (raw.grade || "").trim().toUpperCase(),

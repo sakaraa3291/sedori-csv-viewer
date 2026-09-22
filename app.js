@@ -34,6 +34,36 @@
     return node;
   }
 
+  async function copyText(value, button) {
+    const text = String(value || "").trim();
+    if (!text) return;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.append(area);
+        area.select();
+        if (!document.execCommand("copy")) throw new Error("copy failed");
+        area.remove();
+      }
+      const original = button.textContent;
+      button.textContent = "コピー済み";
+      button.classList.add("copied");
+      window.setTimeout(() => {
+        button.textContent = original;
+        button.classList.remove("copied");
+      }, 1200);
+    } catch (_) {
+      button.textContent = "コピー失敗";
+      window.setTimeout(() => { button.textContent = "コピー"; }, 1200);
+    }
+  }
+
   function render(rows, files) {
     cards.replaceChildren();
     const visibleRows = MobileCsv.filterRows(rows, procurementFilter.value, categoryFilter.value);
@@ -61,6 +91,16 @@
       const duplicate = duplicates.get(row.asin) || 0;
       if (duplicate > 1) top.append(element("small", "duplicate", `重複 ${duplicate}件`));
       body.append(top);
+      if (row.jan) {
+        const codeRow = element("div", "code-row");
+        codeRow.append(element("span", "jan", `JAN ${row.jan}`));
+        const copyJan = element("button", "copy-jan", "コピー");
+        copyJan.type = "button";
+        copyJan.setAttribute("aria-label", `JANコード ${row.jan} をコピー`);
+        copyJan.addEventListener("click", () => copyText(row.jan, copyJan));
+        codeRow.append(copyJan);
+        body.append(codeRow);
+      }
       if (row.title) body.append(element("div", "title", row.title));
       const badges = element("div", "category-badges");
       badges.append(element("div", "category-badge procurement-badge", row.procurementCategory || "未分類"));

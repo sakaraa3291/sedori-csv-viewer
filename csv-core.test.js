@@ -22,6 +22,14 @@ test("category rank falls back to sales_rank", () => {
   assert.equal(row.categoryRank, "12476");
 });
 
+test("JAN code is normalized from current and common header aliases", () => {
+  const [a] = normalizeCsv("asin,jan\nA,4901234567894\n", "jan.csv");
+  const [b] = normalizeCsv("ASIN,JANコード\nB,0123456789012\n", "jan-ja.csv");
+  assert.equal(a.jan, "4901234567894");
+  assert.equal(b.jan, "0123456789012");
+  assert.equal(b.asin, "B");
+});
+
 test("Keepa URL is generated from ASIN and valid supplied URL wins", () => {
   const [generated] = normalizeCsv("asin\nB000000001\n", "a.csv");
   const [supplied] = normalizeCsv("asin,keepa_url\nB000000002,https://keepa.com/custom\n", "b.csv");
