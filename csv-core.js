@@ -76,15 +76,15 @@
     if (has("pet", "ペット", "犬用品", "猫用品")) return "ペット";
     if (has("grocery", "gourmet food", "food and beverage", "食品", "飲料", "お菓子")) return "食品";
     if (has("drugstore", "health and beauty", "health care", "healthcare", "ドラッグ", "ヘルスケア", "衛生")) return "ドラッグストア";
-    if (has("beauty", "luxury beauty", "personal care appliance", "美容", "コスメ", "化粧")) return "美容";
-    if (has("video game", "software", "book", "dvd", "music", "movie", "ゲーム", "書籍", "dvd", "音楽")) return "メディア・ゲーム";
-    if (has("electronics", "consumer electronics", "camera", "wireless", "personal computer", "computer", "major appliance", "家電", "パソコン", "カメラ", "テレビ")) return "家電";
-    if (has("home improvement", "tools", "tool", "biss", "hardware", "diy", "工具", "資材")) return "DIY・工具";
+    if (has("beauty", "luxury beauty", "personal care appliance", "美容", "ビューティー", "コスメ", "化粧")) return "美容";
+    if (has("video game", "software", "book", "dvd", "music", "movie", "ゲーム", "書籍", "洋書", "本", "dvd", "音楽", "ミュージック", "pcソフト", "kindle", "audible")) return "メディア・ゲーム";
+    if (has("electronics", "consumer electronics", "camera", "wireless", "personal computer", "computer", "major appliance", "amazonデバイス", "家電", "パソコン", "カメラ", "テレビ")) return "家電";
+    if (has("home improvement", "tools", "tool", "biss", "hardware", "diy", "工具", "資材", "産業", "研究開発")) return "DIY・工具";
     if (has("kitchen", "home", "office product", "lawn and garden", "household", "日用品", "キッチン", "文房具", "オフィス")) return "日用品";
-    if (has("toys", "toy", "hobby", "collectible", "ホビー", "おもちゃ", "玩具")) return "ホビー";
+    if (has("toys", "toy", "hobby", "collectible", "ホビー", "おもちゃ", "玩具", "楽器", "手芸", "画材")) return "ホビー";
     if (has("sports", "outdoors", "sporting goods", "スポーツ", "アウトドア")) return "スポーツ";
-    if (has("apparel", "shoes", "jewelry", "watch", "luggage", "服", "靴", "ジュエリー", "時計", "バッグ")) return "ファッション";
-    if (has("automotive", "car", "カー用品", "自動車")) return "自動車";
+    if (has("apparel", "shoes", "jewelry", "watch", "luggage", "ファッション", "服", "靴", "ジュエリー", "時計", "バッグ")) return "ファッション";
+    if (has("automotive", "car", "カー用品", "自動車", "車", "バイク")) return "自動車";
     return "その他";
   }
 

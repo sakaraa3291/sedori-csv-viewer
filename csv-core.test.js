@@ -162,3 +162,21 @@ test("normalized rows receive store candidates from sourcing category", () => {
   assert.equal(rows[1].procurementCategory, "食品");
   assert.ok(rows[1].recommendedStores.includes("トライアル"));
 });
+
+test("Japanese Amazon root categories map to sourcing groups", () => {
+  const cases = [
+    ["家電＆カメラ", "家電"], ["ドラッグストア", "ドラッグストア"], ["ビューティー", "美容"],
+    ["ホーム＆キッチン", "日用品"], ["DIY・工具・ガーデン", "DIY・工具"],
+    ["おもちゃ", "ホビー"], ["楽器", "ホビー"], ["ファッション", "ファッション"],
+    ["車＆バイク", "自動車"], ["本", "メディア・ゲーム"],
+  ];
+  for (const [input, expected] of cases) assert.equal(MobileCsv.procurementCategory(input), expected, input);
+});
+
+test("observed Japanese media and hobby roots map correctly", () => {
+  assert.equal(MobileCsv.procurementCategory("洋書"), "メディア・ゲーム");
+  assert.equal(MobileCsv.procurementCategory("ミュージック"), "メディア・ゲーム");
+  assert.equal(MobileCsv.procurementCategory("PCソフト"), "メディア・ゲーム");
+  assert.equal(MobileCsv.procurementCategory("手芸・画材"), "ホビー");
+  assert.equal(MobileCsv.procurementCategory("Amazonデバイス・アクセサリ"), "家電");
+});
