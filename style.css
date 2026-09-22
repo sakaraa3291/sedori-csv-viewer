@@ -26,6 +26,7 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 .asin { font: 700 .95rem ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .code-row { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
 .jan { min-width: 0; flex: 1; font: 700 .88rem ui-monospace, SFMono-Regular, Menlo, monospace; color: #e2e8f0; overflow-wrap: anywhere; }
+.jan-missing { color: #94a3b8; font-family: inherit; font-weight: 600; }
 .copy-jan { min-width: 74px; min-height: 44px; border: 1px solid #475569; border-radius: 10px; background: #243247; color: #f8fafc; font: inherit; font-weight: 700; cursor: pointer; }
 .copy-jan.copied { background: #166534; border-color: #22c55e; }
 .duplicate { color: #fbbf24; }

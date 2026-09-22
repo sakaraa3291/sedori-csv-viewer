@@ -91,16 +91,18 @@
       const duplicate = duplicates.get(row.asin) || 0;
       if (duplicate > 1) top.append(element("small", "duplicate", `重複 ${duplicate}件`));
       body.append(top);
+      const codeRow = element("div", "code-row");
       if (row.jan) {
-        const codeRow = element("div", "code-row");
         codeRow.append(element("span", "jan", `JAN ${row.jan}`));
         const copyJan = element("button", "copy-jan", "コピー");
         copyJan.type = "button";
         copyJan.setAttribute("aria-label", `JANコード ${row.jan} をコピー`);
         copyJan.addEventListener("click", () => copyText(row.jan, copyJan));
         codeRow.append(copyJan);
-        body.append(codeRow);
+      } else {
+        codeRow.append(element("span", "jan jan-missing", "JAN 未取得"));
       }
+      body.append(codeRow);
       if (row.title) body.append(element("div", "title", row.title));
       const badges = element("div", "category-badges");
       badges.append(element("div", "category-badge procurement-badge", row.procurementCategory || "未分類"));
