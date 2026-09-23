@@ -34,7 +34,7 @@
   const DB_KEY = "current-session";
   const FAVORITES_KEY = "favorites-v1";
   const VIEW_KEY = "sedori-csv-card-view";
-  const NORMALIZER_VERSION = 2;
+  const NORMALIZER_VERSION = 3;
   const MEMO_LIMIT = 50;
 
   function openStateDb() {
@@ -114,8 +114,18 @@
   }
 
   function favoriteRows() {
+    const currentByKey = new Map();
+    loadedFiles.forEach((file) => (file.rows || []).forEach((row) => {
+      currentByKey.set(MobileCsv.favoriteKey(row), row);
+    }));
     return Object.values(favorites).map((record) => {
       const row = { ...(record.row || {}) };
+      const current = currentByKey.get(record.key || MobileCsv.favoriteKey(row));
+      if (current) {
+        row.premiumRank = current.premiumRank;
+        row.premiumScore = current.premiumScore;
+        row.premiumNote = current.premiumNote;
+      }
       const category = row.category || "未分類";
       row.category = category;
       row.procurementCategory = row.procurementCategory && row.procurementCategory !== "未分類"
@@ -487,6 +497,12 @@
       const priority = String(row.grade || "").trim().toUpperCase();
       facts.append(element("div", `fact priority-fact priority-${priority || "none"}`,
         `リサーチ優先度 ${priority || "未判定"}`));
+      const premiumRank = String(row.premiumRank || "").trim().toUpperCase();
+      facts.append(element("div", `fact premium-fact premium-${premiumRank || "none"}`,
+        `プレミア期待度 ${premiumRank || "未判定"}`));
+      facts.append(element("div", "fact premium-score",
+        `プレミアスコア ${row.premiumScore == null ? "—" : `${row.premiumScore}/100`}`));
+      if (row.premiumNote) facts.append(element("small", "premium-note", row.premiumNote));
       facts.append(element("div", "fact", `現在価格 ${numberText(row.currentPriceYen, "円")}`));
       facts.append(element("div", "fact", `ランキング ${numberText(row.categoryRank, "位")}`));
       body.append(facts);

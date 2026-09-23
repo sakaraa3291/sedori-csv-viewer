@@ -140,6 +140,155 @@
     return "unknown";
   }
 
+  function firstRawValue(raw, aliases) {
+    for (const alias of aliases) {
+      if (Object.prototype.hasOwnProperty.call(raw, alias) && String(raw[alias]).trim() !== "") {
+        return raw[alias];
+      }
+    }
+    return "";
+  }
+
+  function finiteNumber(value) {
+    if (value == null || String(value).trim() === "") return null;
+    const number = Number(String(value).replace(/,/g, "").trim());
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function normalizeChoice(value, choices) {
+    const text = String(value == null ? "" : value).trim().toLowerCase();
+    for (const [normalized, aliases] of Object.entries(choices)) {
+      if (aliases.includes(text)) return normalized;
+    }
+    return "unknown";
+  }
+
+  function normalizeSuccessorStatus(value) {
+    return normalizeChoice(value, {
+      none: ["none", "no_successor", "なし", "後継品なし"],
+      major_change: ["major_change", "大幅変更", "容量変更", "容量ダウン", "パケ大幅変更", "成分変更", "香り変更"],
+      similar: ["similar", "ほぼ同じ", "軽微変更", "パケ変のみ"],
+    });
+  }
+
+  function normalizeLevel(value) {
+    return normalizeChoice(value, {
+      high: ["high", "高"],
+      medium: ["medium", "中"],
+      low: ["low", "低"],
+    });
+  }
+
+  function normalizeNeedType(value) {
+    return normalizeChoice(value, {
+      minus_to_zero: ["minus_to_zero", "-to0", "－→0", "マイナスからゼロ"],
+      zero_to_plus: ["zero_to_plus", "0to+", "0→+", "ゼロからプラス"],
+      neutral: ["neutral", "中間"],
+    });
+  }
+
+  function premiumRankFromScore(score) {
+    if (score >= 80) return "S";
+    if (score >= 65) return "A";
+    if (score >= 50) return "B";
+    return "C";
+  }
+
+  function calculatePremiumPotential(input) {
+    const data = input || {};
+    const explicitScoreNumber = finiteNumber(data.explicitScore);
+    const explicitScore = explicitScoreNumber === null
+      ? null : Math.min(100, Math.max(0, explicitScoreNumber));
+    const candidateRank = String(data.explicitRank || "").trim().toUpperCase();
+    const explicitRank = ["S", "A", "B", "C"].includes(candidateRank) ? candidateRank : "";
+    const categoryRank = finiteNumber(data.categoryRank);
+    const productYears = finiteNumber(data.productYears);
+    const reviewCount = finiteNumber(data.reviewCount);
+    const salesAgeDays = finiteNumber(data.salesAgeDays);
+    const successorStatus = normalizeSuccessorStatus(data.successorStatus);
+    const uniquenessLevel = normalizeLevel(data.uniquenessLevel);
+    const needType = normalizeNeedType(data.needType);
+    const userDependency = normalizeLevel(data.userDependency);
+    const reviewDependency = normalizeLevel(data.reviewDependency);
+    const hasEvidence = successorStatus !== "unknown" || uniquenessLevel !== "unknown" ||
+      needType !== "unknown" || userDependency !== "unknown" || reviewDependency !== "unknown" ||
+      productYears !== null;
+
+    if (explicitScore === null && !explicitRank && !hasEvidence) {
+      return {
+        premiumScore: null, premiumRank: "", premiumNote: "",
+        successorStatus, uniquenessLevel, needType, userDependency, reviewDependency,
+        reviewCount, salesAgeDays, productYears,
+      };
+    }
+
+    let score = 0;
+    score += { none: 18, major_change: 12, similar: 3 }[successorStatus] || 0;
+    score += { high: 12, medium: 6 }[uniquenessLevel] || 0;
+    if (categoryRank !== null && categoryRank > 0) {
+      if (categoryRank <= 3000) score += 25;
+      else if (categoryRank <= 5000) score += 18;
+      else if (categoryRank <= 7000) score += 12;
+      else if (categoryRank <= 10000) score += 6;
+    }
+    score += { minus_to_zero: 12, neutral: 6, zero_to_plus: 3 }[needType] || 0;
+    score += { high: 8, medium: 4 }[userDependency] || 0;
+    score += { high: 8, medium: 4 }[reviewDependency] || 0;
+    if (reviewCount !== null && reviewCount > 0 && salesAgeDays !== null && salesAgeDays > 0) {
+      const density = reviewCount / salesAgeDays;
+      if (density >= 1) score += 7;
+      else if (density >= 0.3) score += 5;
+      else if (density >= 0.1) score += 3;
+      else score += 1;
+    }
+    if (productYears !== null) {
+      if (productYears >= 5) score += 10;
+      else if (productYears >= 3) score += 7;
+      else if (productYears >= 1) score += 4;
+      else if (productYears > 0) score += 1;
+    }
+    score = explicitScore === null ? score : explicitScore;
+
+    let rank = explicitRank || premiumRankFromScore(score);
+    let premiumNote = "";
+    if (categoryRank !== null && categoryRank > 0 && rank !== "C") {
+      const capReasons = [];
+      if (successorStatus === "none" && categoryRank > 10000) capReasons.push("後継品なし・1万位超");
+      if (successorStatus === "major_change" && categoryRank > 5000) capReasons.push("大幅変更・5000位超");
+      if (successorStatus === "similar" && !(categoryRank <= 999 && reviewDependency === "high")) {
+        capReasons.push("後継品がほぼ同じ");
+      }
+      if (needType === "minus_to_zero" && categoryRank > 7000) capReasons.push("必要性高・7000位超");
+      if (needType === "zero_to_plus" && categoryRank > 5000) capReasons.push("嗜好品・5000位超");
+      if (capReasons.length) {
+        rank = "C";
+        premiumNote = `${capReasons.join("／")}のためC上限`;
+      }
+    }
+
+    return {
+      premiumScore: score, premiumRank: rank, premiumNote,
+      successorStatus, uniquenessLevel, needType, userDependency, reviewDependency,
+      reviewCount, salesAgeDays, productYears,
+    };
+  }
+
+  function premiumPotentialFromRaw(raw, categoryRank) {
+    return calculatePremiumPotential({
+      explicitScore: firstRawValue(raw, ["premium_score", "プレミアスコア"]),
+      explicitRank: firstRawValue(raw, ["premium_rank", "プレミアランク", "プレミア期待度"]),
+      successorStatus: firstRawValue(raw, ["successor_status", "後継品状態"]),
+      uniquenessLevel: firstRawValue(raw, ["uniqueness_level", "唯一無二"]),
+      needType: firstRawValue(raw, ["need_type", "必要性タイプ"]),
+      userDependency: firstRawValue(raw, ["user_dependency", "使用者依存度"]),
+      reviewDependency: firstRawValue(raw, ["review_dependency", "レビュー依存度"]),
+      reviewCount: firstRawValue(raw, ["review_count", "レビュー数"]),
+      salesAgeDays: firstRawValue(raw, ["sales_age_days", "販売日数"]),
+      productYears: firstRawValue(raw, ["product_years", "販売年数"]),
+      categoryRank,
+    });
+  }
+
   function normalizeRows(text, fileName) {
     const parsed = parseCsv(text);
     if (!parsed.length) return [];
@@ -165,17 +314,20 @@
       const procurement = procurementCategory(category, explicitProcurement);
       const explicitStores = (raw.recommended_stores || raw["推奨仕入れ店舗"] || raw["仕入れ店舗候補"] || "").trim();
       const amazonStatus = amazonStatusFromRaw(raw);
+      const categoryRank = ((raw.category_rank || "").trim() || (raw.sales_rank || "").trim());
+      const premium = premiumPotentialFromRaw(raw, categoryRank);
       rows.push({
         asin,
         jan,
         currentPriceYen: (raw.current_price_yen || "").trim(),
-        categoryRank: ((raw.category_rank || "").trim() || (raw.sales_rank || "").trim()),
+        categoryRank,
         grade: (raw.grade || "").trim().toUpperCase(),
         title: (raw.title || "").trim(),
         category,
         procurementCategory: procurement,
         recommendedStores: recommendedStores(procurement, explicitStores),
         amazonStatus,
+        ...premium,
         imageUrl: /^https?:\/\//i.test(image) ? image : fallbackImage,
         keepaUrl: /^https:\/\/(?:www\.)?keepa\.com\//i.test(suppliedKeepa)
           ? suppliedKeepa
@@ -268,7 +420,8 @@
     const headers = [
       "お気に入りジャンル", "仕入れカテゴリー", "Amazonカテゴリー", "商品名",
       "ASIN", "JAN", "メモ", "Amazon本体", "現在価格", "ランキング",
-      "判定ランク", "Keepa URL", "モノトレーサーURL", "仕入れ店舗候補",
+      "判定ランク", "プレミア期待度", "プレミアスコア", "プレミア注意",
+      "Keepa URL", "モノトレーサーURL", "仕入れ店舗候補",
     ];
     const body = (rows || []).map((row) => [
       row.category || "未分類",
@@ -282,6 +435,9 @@
       row.currentPriceYen || "",
       row.categoryRank || "",
       row.grade || "",
+      row.premiumRank || "未判定",
+      row.premiumScore == null ? "" : row.premiumScore,
+      row.premiumNote || "",
       row.keepaUrl || "",
       row.monotracerUrl || "",
       Array.isArray(row.recommendedStores) ? row.recommendedStores : [],
@@ -293,5 +449,5 @@
     return files.filter((file) => file.id !== fileId);
   }
 
-  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, favoriteKey, normalizeMemo, favoriteExportCsv, withoutFile };
+  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, calculatePremiumPotential, premiumPotentialFromRaw, favoriteKey, normalizeMemo, favoriteExportCsv, withoutFile };
 });

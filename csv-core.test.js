@@ -247,3 +247,77 @@ test("favorite export CSV caps memo at 50 characters", () => {
   assert.ok(csv.includes("あ".repeat(50)));
   assert.ok(!csv.includes("あ".repeat(51)));
 });
+
+test("premium score boundaries map to S A B and C", () => {
+  const calculate = MobileCsv.calculatePremiumPotential;
+  assert.equal(calculate({ explicitScore: 80 }).premiumRank, "S");
+  assert.equal(calculate({ explicitScore: 79 }).premiumRank, "A");
+  assert.equal(calculate({ explicitScore: 65 }).premiumRank, "A");
+  assert.equal(calculate({ explicitScore: 64 }).premiumRank, "B");
+  assert.equal(calculate({ explicitScore: 50 }).premiumRank, "B");
+  assert.equal(calculate({ explicitScore: 49 }).premiumRank, "C");
+});
+
+test("explicit premium score is clamped and valid explicit rank wins", () => {
+  const high = MobileCsv.calculatePremiumPotential({ explicitScore: 120 });
+  const low = MobileCsv.calculatePremiumPotential({ explicitScore: -5 });
+  const ranked = MobileCsv.calculatePremiumPotential({ explicitScore: 100, explicitRank: "b" });
+  const invalidRank = MobileCsv.calculatePremiumPotential({ explicitScore: 80, explicitRank: "D" });
+  assert.deepEqual([high.premiumScore, high.premiumRank], [100, "S"]);
+  assert.deepEqual([low.premiumScore, low.premiumRank], [0, "C"]);
+  assert.equal(ranked.premiumRank, "B");
+  assert.equal(invalidRank.premiumRank, "S");
+});
+
+test("rank caps apply after an explicit premium rank", () => {
+  const result = MobileCsv.calculatePremiumPotential({
+    explicitRank: "S", successorStatus: "major_change", categoryRank: 5001,
+  });
+  assert.equal(result.premiumRank, "C");
+  assert.match(result.premiumNote, /C上限/);
+});
+
+test("none with a category rank over 10000 is capped at C", () => {
+  const result = MobileCsv.calculatePremiumPotential({
+    explicitScore: 100, successorStatus: "none", categoryRank: 10001,
+  });
+  assert.equal(result.premiumRank, "C");
+  assert.match(result.premiumNote, /C上限/);
+});
+
+test("similar is capped except for three-digit rank with high review dependency", () => {
+  const capped = MobileCsv.calculatePremiumPotential({
+    explicitScore: 100, successorStatus: "similar", categoryRank: 1000, reviewDependency: "high",
+  });
+  const exception = MobileCsv.calculatePremiumPotential({
+    explicitScore: 100, successorStatus: "ほぼ同じ", categoryRank: 999, reviewDependency: "高",
+  });
+  assert.equal(capped.premiumRank, "C");
+  assert.equal(exception.premiumRank, "S");
+  assert.equal(exception.premiumNote, "");
+});
+
+test("premium potential stays unjudged when only ranking and review metrics exist", () => {
+  const [row] = normalizeCsv(
+    "asin,category_rank,review_count,sales_age_days\nA,1,1000,10\n", "insufficient.csv");
+  assert.equal(row.premiumRank, "");
+  assert.equal(row.premiumScore, null);
+});
+
+test("Japanese premium aliases normalize and a complete profile scores 100", () => {
+  const [row] = normalizeCsv(
+    "asin,後継品状態,唯一無二,必要性タイプ,使用者依存度,レビュー依存度,レビュー数,販売日数,販売年数,category_rank\n" +
+    "A,後継品なし,高,マイナスからゼロ,高,高,365,365,5,3000\n", "premium-ja.csv");
+  assert.equal(row.premiumScore, 100);
+  assert.equal(row.premiumRank, "S");
+  assert.equal(row.successorStatus, "none");
+});
+
+test("favorite export adds premium rank score and note columns", () => {
+  const csv = MobileCsv.favoriteExportCsv([{
+    category: "美容", premiumRank: "C", premiumScore: 88, premiumNote: "後継品がほぼ同じためC上限",
+  }]);
+  const [header, body] = csv.replace(/^\uFEFF/, "").trim().split("\r\n");
+  assert.ok(header.includes("判定ランク,プレミア期待度,プレミアスコア,プレミア注意,Keepa URL"));
+  assert.ok(body.includes(",C,88,後継品がほぼ同じためC上限,"));
+});
