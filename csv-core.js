@@ -258,9 +258,40 @@
     return String(value == null ? "" : value).slice(0, limit);
   }
 
+  function csvCell(value) {
+    const text = Array.isArray(value) ? value.join("｜") : String(value == null ? "" : value);
+    const escaped = text.replace(/"/g, '""');
+    return /[",\r\n]/.test(text) ? `"${escaped}"` : escaped;
+  }
+
+  function favoriteExportCsv(rows) {
+    const headers = [
+      "お気に入りジャンル", "仕入れカテゴリー", "Amazonカテゴリー", "商品名",
+      "ASIN", "JAN", "メモ", "Amazon本体", "現在価格", "ランキング",
+      "判定ランク", "Keepa URL", "モノトレーサーURL", "仕入れ店舗候補",
+    ];
+    const body = (rows || []).map((row) => [
+      row.category || "未分類",
+      row.procurementCategory || "未分類",
+      row.category || "未分類",
+      row.title || "",
+      row.asin || "",
+      row.jan || "",
+      normalizeMemo(row.favoriteMemo || "", 50),
+      row.amazonStatus === "absent" ? "Amazon不在" : row.amazonStatus === "present" ? "Amazonあり" : "不明",
+      row.currentPriceYen || "",
+      row.categoryRank || "",
+      row.grade || "",
+      row.keepaUrl || "",
+      row.monotracerUrl || "",
+      Array.isArray(row.recommendedStores) ? row.recommendedStores : [],
+    ]);
+    return "\uFEFF" + [headers, ...body].map((line) => line.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  }
+
   function withoutFile(files, fileId) {
     return files.filter((file) => file.id !== fileId);
   }
 
-  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, favoriteKey, normalizeMemo, withoutFile };
+  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, favoriteKey, normalizeMemo, favoriteExportCsv, withoutFile };
 });

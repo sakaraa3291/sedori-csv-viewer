@@ -227,3 +227,23 @@ test("favorite memo is capped at 50 characters without trimming content", () => 
   assert.equal(MobileCsv.normalizeMemo(source).length, 50);
   assert.equal(MobileCsv.normalizeMemo("  店舗在庫を確認  "), "  店舗在庫を確認  ");
 });
+
+test("favorite export CSV contains all requested fields and escapes text", () => {
+  const csv = MobileCsv.favoriteExportCsv([{
+    category: "おもちゃ", procurementCategory: "ホビー", title: '商品,"特価"', asin: "B000000001",
+    jan: "4900000000000", favoriteMemo: "ワゴン,棚を確認", amazonStatus: "absent",
+    currentPriceYen: "1980", categoryRank: "71", grade: "A",
+    keepaUrl: "https://keepa.com/#!product/5-B000000001",
+    monotracerUrl: "https://www.mono-tracer.com/#/product/B000000001",
+    recommendedStores: ["ジョーシン", "ドン・キホーテ"],
+  }]);
+  assert.ok(csv.startsWith("\uFEFFお気に入りジャンル,仕入れカテゴリー,Amazonカテゴリー"));
+  assert.ok(csv.includes('おもちゃ,ホビー,おもちゃ,"商品,""特価""",B000000001,4900000000000,"ワゴン,棚を確認",Amazon不在,1980,71,A'));
+  assert.ok(csv.includes("ジョーシン｜ドン・キホーテ"));
+});
+
+test("favorite export CSV caps memo at 50 characters", () => {
+  const csv = MobileCsv.favoriteExportCsv([{ category: "ドラッグストア", favoriteMemo: "あ".repeat(55) }]);
+  assert.ok(csv.includes("あ".repeat(50)));
+  assert.ok(!csv.includes("あ".repeat(51)));
+});

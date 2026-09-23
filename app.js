@@ -12,6 +12,13 @@
   const clearAll = document.querySelector("#clear-all");
   const categoryControls = document.querySelector("#category-controls");
   const viewFilter = document.querySelector("#view-filter");
+  const favoritesToggle = document.querySelector("#favorites-toggle");
+  const favoritesCount = document.querySelector("#favorites-count");
+  const favoritesPanel = document.querySelector("#favorites-panel");
+  const favoriteGenres = document.querySelector("#favorite-genres");
+  const favoritesShowAll = document.querySelector("#favorites-show-all");
+  const favoritesBackAll = document.querySelector("#favorites-back-all");
+  const favoritesExport = document.querySelector("#favorites-export");
   const procurementFilter = document.querySelector("#procurement-filter");
   const categoryFilter = document.querySelector("#category-filter");
   const amazonStatusFilter = document.querySelector("#amazon-status-filter");
@@ -21,6 +28,7 @@
   let favoritePersistTimer = null;
   let restoreComplete = false;
   let filesExpanded = false;
+  let favoritesExpanded = false;
   const DB_NAME = "sedori-csv-card";
   const DB_STORE = "state";
   const DB_KEY = "current-session";
@@ -142,6 +150,7 @@
         category: categoryFilter.value || "__ALL__",
         amazonStatus: amazonStatusFilter.value || "__ALL__",
         filesExpanded,
+        favoritesExpanded,
         scrollY: Math.max(0, Math.round(window.scrollY || 0)),
       }));
     } catch (_) { /* Safari private mode/storage failure: continue without view restore. */ }
@@ -158,6 +167,7 @@
   async function restorePersistedState() {
     const view = readViewState();
     filesExpanded = view.filesExpanded === true;
+    favoritesExpanded = view.favoritesExpanded === true;
     try {
       const [savedFiles, savedFavorites] = await Promise.all([
         readPersistedFiles().catch(() => null),
@@ -291,6 +301,77 @@
     return record.memo;
   }
 
+  function syncFavoritesPanel() {
+    const rows = favoriteRows();
+    favoritesCount.textContent = `${rows.length.toLocaleString("ja-JP")}件`;
+    favoritesToggle.setAttribute("aria-expanded", String(favoritesExpanded));
+    favoritesPanel.hidden = !favoritesExpanded;
+    favoritesExport.disabled = rows.length === 0;
+    favoritesShowAll.disabled = rows.length === 0;
+    favoriteGenres.replaceChildren();
+    const genres = MobileCsv.categoryCounts(rows, "category");
+    if (!genres.length) {
+      favoriteGenres.append(element("div", "favorites-empty", "お気に入りはまだありません"));
+      return;
+    }
+    genres.forEach(({ category, count }) => {
+      const button = element("button", "favorite-genre-button");
+      button.type = "button";
+      button.append(element("span", "favorite-genre-name", category));
+      button.append(element("span", "favorite-genre-button-count", `${count}件`));
+      button.addEventListener("click", () => showFavoriteCategory(category));
+      favoriteGenres.append(button);
+    });
+  }
+
+  function showAllFavorites() {
+    viewFilter.value = "favorites";
+    procurementFilter.value = "__ALL__";
+    categoryFilter.value = "__ALL__";
+    amazonStatusFilter.value = "__ALL__";
+    renderState();
+    writeViewState();
+  }
+
+  function showFavoriteCategory(category) {
+    viewFilter.value = "favorites";
+    procurementFilter.value = "__ALL__";
+    categoryFilter.value = "__ALL__";
+    amazonStatusFilter.value = "__ALL__";
+    renderState();
+    if (Array.from(categoryFilter.options).some((option) => option.value === category)) {
+      categoryFilter.value = category;
+    }
+    render(currentRows(), loadedFiles);
+    writeViewState();
+  }
+
+  function showAllProducts() {
+    viewFilter.value = "all";
+    procurementFilter.value = "__ALL__";
+    categoryFilter.value = "__ALL__";
+    amazonStatusFilter.value = "__ALL__";
+    renderState();
+    writeViewState();
+  }
+
+  function downloadFavoritesCsv() {
+    const rows = favoriteRows().slice().sort((a, b) =>
+      String(a.category || "未分類").localeCompare(String(b.category || "未分類"), "ja") ||
+      (b.favoriteCreatedAt || 0) - (a.favoriteCreatedAt || 0));
+    if (!rows.length) return;
+    const csv = MobileCsv.favoriteExportCsv(rows);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, "0");
+    const name = `お気に入り_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.csv`;
+    const link = document.createElement("a");
+    link.href = url; link.download = name; link.style.display = "none";
+    document.body.append(link); link.click(); link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   function syncFilePanel() {
     const count = loadedFiles.length;
     fileToggleLabel.textContent = `選択中CSV ${count}件`;
@@ -316,15 +397,15 @@
     let rowsToRender = visibleRows;
     let genreCounts = new Map();
     if (viewFilter.value === "favorites") {
-      const orderedGenres = MobileCsv.categoryCounts(visibleRows, "procurementCategory");
+      const orderedGenres = MobileCsv.categoryCounts(visibleRows, "category");
       genreCounts = new Map(orderedGenres.map((item) => [item.category, item.count]));
       rowsToRender = orderedGenres.flatMap(({ category }) =>
-        visibleRows.filter((row) => (row.procurementCategory || "未分類") === category));
+        visibleRows.filter((row) => (row.category || "未分類") === category));
     }
     let lastGenre = null;
     rowsToRender.forEach((row) => {
       if (viewFilter.value === "favorites") {
-        const genre = row.procurementCategory || "未分類";
+        const genre = row.category || "未分類";
         if (genre !== lastGenre) {
           const heading = element("div", "favorite-genre-heading");
           heading.append(element("strong", "favorite-genre-title", genre));
@@ -425,7 +506,8 @@
     const favoriteList = favoriteRows();
     const currentView = viewFilter.value === "favorites" ? "favorites" : "all";
     const procurementLabel = document.querySelector("#procurement-label");
-    if (procurementLabel) procurementLabel.textContent = currentView === "favorites" ? "お気に入りジャンル" : "仕入れカテゴリー";
+    if (procurementLabel) procurementLabel.textContent = currentView === "favorites" ? "大分類" : "仕入れカテゴリー";
+    syncFavoritesPanel();
     viewFilter.replaceChildren();
     const allView = element("option", "", `全商品（${loadedRows.length.toLocaleString("ja-JP")}）`);
     allView.value = "all"; viewFilter.append(allView);
@@ -504,6 +586,15 @@
     try { localStorage.removeItem(VIEW_KEY); } catch (_) {}
     deletePersistedFiles().catch(() => {});
   }
+
+  favoritesToggle.addEventListener("click", () => {
+    favoritesExpanded = !favoritesExpanded;
+    syncFavoritesPanel();
+    writeViewState();
+  });
+  favoritesShowAll.addEventListener("click", showAllFavorites);
+  favoritesBackAll.addEventListener("click", showAllProducts);
+  favoritesExport.addEventListener("click", downloadFavoritesCsv);
 
   clearAll.addEventListener("click", reset);
   fileToggle.addEventListener("click", () => {

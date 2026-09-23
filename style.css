@@ -77,3 +77,22 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 .favorite-genre-heading { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 2px -2px; padding: 9px 11px; border-left: 4px solid #f59e0b; border-radius: 8px; background: #172033; }
 .favorite-genre-title { color: #fef3c7; font-size: .95rem; }
 .favorite-genre-count { color: #cbd5e1; font-size: .78rem; font-weight: 700; }
+
+#favorites-controls { margin-top: 10px; }
+#favorites-toggle { display: flex; width: 100%; min-height: 46px; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid #92400e; border-radius: 12px; background: #422006; color: #fef3c7; font: inherit; font-weight: 800; cursor: pointer; }
+.favorites-toggle-side { display: inline-flex; align-items: center; gap: 9px; }
+#favorites-count { color: #fde68a; font-size: .84rem; }
+.favorites-toggle-mark { transition: transform .16s ease; }
+#favorites-toggle[aria-expanded="true"] .favorites-toggle-mark { transform: rotate(180deg); }
+#favorites-panel { margin-top: 7px; padding: 10px; border: 1px solid #334155; border-radius: 12px; background: #111827; }
+.favorites-main-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+#favorites-show-all, #favorites-back-all, #favorites-export, .favorite-genre-button { border: 0; border-radius: 10px; color: #f8fafc; font: inherit; font-weight: 800; cursor: pointer; }
+#favorites-show-all { min-height: 42px; background: #92400e; color: #fef3c7; }
+#favorites-back-all { min-height: 42px; background: #334155; }
+.favorites-genre-label { margin: 11px 2px 6px; color: #cbd5e1; font-size: .78rem; font-weight: 800; }
+#favorite-genres { display: grid; gap: 6px; }
+.favorite-genre-button { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; background: #1e293b; text-align: left; }
+.favorite-genre-button-count { color: #fbbf24; font-size: .78rem; }
+.favorites-empty { padding: 8px 4px; color: #94a3b8; font-size: .82rem; }
+#favorites-export { width: 100%; min-height: 44px; margin-top: 10px; background: #0f766e; }
+#favorites-export:disabled, #favorites-show-all:disabled { opacity: .45; cursor: default; }
