@@ -11,18 +11,23 @@
   const selectedFiles = document.querySelector("#selected-files");
   const clearAll = document.querySelector("#clear-all");
   const categoryControls = document.querySelector("#category-controls");
+  const viewFilter = document.querySelector("#view-filter");
   const procurementFilter = document.querySelector("#procurement-filter");
   const categoryFilter = document.querySelector("#category-filter");
   const amazonStatusFilter = document.querySelector("#amazon-status-filter");
   let loadedFiles = [];
+  let favorites = {};
   let persistTimer = null;
+  let favoritePersistTimer = null;
   let restoreComplete = false;
   let filesExpanded = false;
   const DB_NAME = "sedori-csv-card";
   const DB_STORE = "state";
   const DB_KEY = "current-session";
+  const FAVORITES_KEY = "favorites-v1";
   const VIEW_KEY = "sedori-csv-card-view";
   const NORMALIZER_VERSION = 2;
+  const MEMO_LIMIT = 50;
 
   function openStateDb() {
     return new Promise((resolve, reject) => {
@@ -70,6 +75,50 @@
     } finally { db.close(); }
   }
 
+  async function readPersistedFavorites() {
+    const db = await openStateDb();
+    try {
+      return await new Promise((resolve, reject) => {
+        const request = db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get(FAVORITES_KEY);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error || new Error("お気に入りを読めません"));
+      });
+    } finally { db.close(); }
+  }
+
+  async function writePersistedFavorites() {
+    const db = await openStateDb();
+    try {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, "readwrite");
+        tx.objectStore(DB_STORE).put({ favorites, savedAt: Date.now() }, FAVORITES_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error("お気に入り保存に失敗しました"));
+      });
+    } finally { db.close(); }
+  }
+
+  function scheduleFavoritePersist() {
+    window.clearTimeout(favoritePersistTimer);
+    favoritePersistTimer = window.setTimeout(() => {
+      writePersistedFavorites().catch(() => {});
+    }, 150);
+  }
+
+  function favoriteRows() {
+    return Object.values(favorites).map((record) => ({
+      ...record.row,
+      favoriteMemo: record.memo || "",
+      favoriteCreatedAt: record.createdAt || 0,
+    })).sort((a, b) => (b.favoriteCreatedAt || 0) - (a.favoriteCreatedAt || 0));
+  }
+
+  function currentRows() {
+    return viewFilter.value === "favorites"
+      ? favoriteRows()
+      : loadedFiles.flatMap((file) => file.rows);
+  }
+
   function readViewState() {
     try {
       const value = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
@@ -80,6 +129,7 @@
   function writeViewState() {
     try {
       localStorage.setItem(VIEW_KEY, JSON.stringify({
+        viewMode: viewFilter.value || "all",
         procurement: procurementFilter.value || "__ALL__",
         category: categoryFilter.value || "__ALL__",
         amazonStatus: amazonStatusFilter.value || "__ALL__",
@@ -101,9 +151,12 @@
     const view = readViewState();
     filesExpanded = view.filesExpanded === true;
     try {
-      const saved = await readPersistedFiles();
-      if (saved && Array.isArray(saved.loadedFiles)) {
-        loadedFiles = saved.loadedFiles.map((file) => {
+      const [savedFiles, savedFavorites] = await Promise.all([
+        readPersistedFiles().catch(() => null),
+        readPersistedFavorites().catch(() => null),
+      ]);
+      if (savedFiles && Array.isArray(savedFiles.loadedFiles)) {
+        loadedFiles = savedFiles.loadedFiles.map((file) => {
           if (file && typeof file.rawText === "string" && file.normalizerVersion !== NORMALIZER_VERSION) {
             try {
               return { ...file, rows: MobileCsv.normalizeCsv(file.rawText, file.name),
@@ -115,9 +168,14 @@
           return file;
         });
       }
-    } catch (_) { loadedFiles = []; }
+      if (savedFavorites && savedFavorites.favorites && typeof savedFavorites.favorites === "object") {
+        favorites = savedFavorites.favorites;
+      }
+    } catch (_) {
+      loadedFiles = []; favorites = {};
+    }
+    viewFilter.value = view.viewMode === "favorites" ? "favorites" : "all";
     renderState();
-    const rows = loadedFiles.flatMap((file) => file.rows);
     if (Array.from(procurementFilter.options).some((option) => option.value === view.procurement)) {
       procurementFilter.value = view.procurement;
     }
@@ -127,7 +185,7 @@
     if (Array.from(amazonStatusFilter.options).some((option) => option.value === view.amazonStatus)) {
       amazonStatusFilter.value = view.amazonStatus;
     }
-    render(rows, loadedFiles);
+    render(currentRows(), loadedFiles);
     if (Number.isFinite(view.scrollY) && view.scrollY > 0) {
       requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, view.scrollY)));
     }
@@ -185,6 +243,42 @@
     }
   }
 
+  function favoriteRecordFor(row) {
+    return favorites[MobileCsv.favoriteKey(row)] || null;
+  }
+
+  function favoriteSnapshot(row) {
+    const snapshot = { ...row };
+    delete snapshot.favoriteMemo;
+    delete snapshot.favoriteCreatedAt;
+    if (Array.isArray(row.recommendedStores)) snapshot.recommendedStores = row.recommendedStores.slice();
+    return snapshot;
+  }
+
+  function toggleFavorite(row) {
+    const key = MobileCsv.favoriteKey(row);
+    if (favorites[key]) {
+      delete favorites[key];
+    } else {
+      const now = Date.now();
+      favorites[key] = {
+        key, row: favoriteSnapshot(row), memo: "", createdAt: now, updatedAt: now,
+      };
+    }
+    scheduleFavoritePersist();
+    renderState();
+  }
+
+  function updateFavoriteMemo(row, value) {
+    const key = MobileCsv.favoriteKey(row);
+    const record = favorites[key];
+    if (!record) return "";
+    record.memo = MobileCsv.normalizeMemo(value, MEMO_LIMIT);
+    record.updatedAt = Date.now();
+    scheduleFavoritePersist();
+    return record.memo;
+  }
+
   function syncFilePanel() {
     const count = loadedFiles.length;
     fileToggleLabel.textContent = `選択中CSV ${count}件`;
@@ -197,10 +291,15 @@
     const visibleRows = MobileCsv.filterRows(rows, procurementFilter.value, categoryFilter.value, amazonStatusFilter.value);
     const duplicates = MobileCsv.duplicateCounts(rows);
     const filtered = procurementFilter.value !== "__ALL__" || categoryFilter.value !== "__ALL__" || amazonStatusFilter.value !== "__ALL__";
-    summary.textContent = files.length
-      ? `${files.length === 1 ? files[0].name : `${files.length}ファイル`}｜総取込 ${rows.length.toLocaleString("ja-JP")}行` +
-        (filtered ? `｜表示 ${visibleRows.length.toLocaleString("ja-JP")}行` : "")
-      : "CSVを選択してください";
+    if (viewFilter.value === "favorites") {
+      summary.textContent = `★ お気に入り ${rows.length.toLocaleString("ja-JP")}件` +
+        (filtered ? `｜表示 ${visibleRows.length.toLocaleString("ja-JP")}件` : "");
+    } else {
+      summary.textContent = files.length
+        ? `${files.length === 1 ? files[0].name : `${files.length}ファイル`}｜総取込 ${rows.length.toLocaleString("ja-JP")}行` +
+          (filtered ? `｜表示 ${visibleRows.length.toLocaleString("ja-JP")}行` : "")
+        : "CSVを選択してください";
+    }
     const fragment = document.createDocumentFragment();
     visibleRows.forEach((row) => {
       const card = element("article", "card");
@@ -218,6 +317,13 @@
       top.append(element("span", "asin", row.asin || "ASINなし"));
       const duplicate = duplicates.get(row.asin) || 0;
       if (duplicate > 1) top.append(element("small", "duplicate", `重複 ${duplicate}件`));
+      const favorite = favoriteRecordFor(row);
+      const favoriteButton = element("button", `favorite-toggle${favorite ? " is-favorite" : ""}`,
+        favorite ? "★ お気に入り" : "☆ お気に入り");
+      favoriteButton.type = "button";
+      favoriteButton.setAttribute("aria-pressed", String(Boolean(favorite)));
+      favoriteButton.addEventListener("click", () => toggleFavorite(row));
+      top.append(favoriteButton);
       body.append(top);
       const amazonBadge = element("div", `amazon-status amazon-${row.amazonStatus || "unknown"}`,
         row.amazonStatus === "absent" ? "Amazon不在" : row.amazonStatus === "present" ? "Amazonあり" : "Amazon不明");
@@ -239,6 +345,25 @@
       badges.append(element("div", "category-badge procurement-badge", row.procurementCategory || "未分類"));
       if (row.category && row.category !== "未分類") badges.append(element("div", "category-badge source-category", row.category));
       body.append(badges);
+      if (favorite) {
+        const memoWrap = element("div", "favorite-memo");
+        const memoHeader = element("div", "favorite-memo-header");
+        memoHeader.append(element("span", "favorite-memo-label", "メモ"));
+        const memoCount = element("span", "favorite-memo-count", `${(favorite.memo || "").length}/${MEMO_LIMIT}`);
+        memoHeader.append(memoCount);
+        const memo = element("textarea", "favorite-memo-input");
+        memo.maxLength = MEMO_LIMIT;
+        memo.rows = 2;
+        memo.placeholder = "店舗で確認することなど（50文字まで）";
+        memo.value = favorite.memo || "";
+        memo.addEventListener("input", () => {
+          const saved = updateFavoriteMemo(row, memo.value);
+          if (memo.value !== saved) memo.value = saved;
+          memoCount.textContent = `${saved.length}/${MEMO_LIMIT}`;
+        });
+        memoWrap.append(memoHeader, memo);
+        body.append(memoWrap);
+      }
       if (row.recommendedStores && row.recommendedStores.length) {
         const stores = element("div", "store-candidates");
         stores.append(element("div", "store-label", "仕入れ店舗候補"));
@@ -265,11 +390,22 @@
   }
 
   function renderState() {
-    const rows = loadedFiles.flatMap((file) => file.rows);
+    const loadedRows = loadedFiles.flatMap((file) => file.rows);
+    const favoriteList = favoriteRows();
+    const currentView = viewFilter.value === "favorites" ? "favorites" : "all";
+    viewFilter.replaceChildren();
+    const allView = element("option", "", `全商品（${loadedRows.length.toLocaleString("ja-JP")}）`);
+    allView.value = "all"; viewFilter.append(allView);
+    const favoriteView = element("option", "", `★ お気に入り（${favoriteList.length.toLocaleString("ja-JP")}）`);
+    favoriteView.value = "favorites"; viewFilter.append(favoriteView);
+    viewFilter.value = currentView;
+
+    const rows = currentRows();
     selectedFiles.replaceChildren(); errors.replaceChildren();
     fileControls.hidden = loadedFiles.length === 0;
     if (!loadedFiles.length) filesExpanded = false;
     syncFilePanel();
+
     const procurementCounts = MobileCsv.categoryCounts(rows, "procurementCategory");
     const categoryCounts = MobileCsv.categoryCounts(rows, "category");
     const currentProcurement = procurementFilter.value;
@@ -287,6 +423,7 @@
     const categoryValues = new Set(["__ALL__", ...categoryCounts.map((item) => item.category)]);
     procurementFilter.value = procurementValues.has(currentProcurement) ? currentProcurement : "__ALL__";
     categoryFilter.value = categoryValues.has(currentCategory) ? currentCategory : "__ALL__";
+
     const currentAmazon = amazonStatusFilter.value;
     const statusCounts = MobileCsv.amazonStatusCounts(rows);
     amazonStatusFilter.replaceChildren();
@@ -299,13 +436,15 @@
       const option = element("option", "", `${label}（${count}）`); option.value = value; amazonStatusFilter.append(option);
     }
     amazonStatusFilter.value = ["__ALL__", "absent", "present", "unknown"].includes(currentAmazon) ? currentAmazon : "__ALL__";
-    categoryControls.hidden = rows.length === 0;
+    categoryControls.hidden = loadedRows.length === 0 && favoriteList.length === 0;
+
     const legacyAmazonFiles = loadedFiles.filter((file) => Array.isArray(file.rows) &&
       file.rows.some((row) => !Object.prototype.hasOwnProperty.call(row, "amazonStatus")));
     if (legacyAmazonFiles.length) {
       errors.append(element("li", "stale-data-warning",
         `Amazon状態追加前に読み込んだCSVが${legacyAmazonFiles.length}件あります。Amazon絞り込みを使うには現在のCSVを再選択してください。`));
     }
+
     loadedFiles.forEach((file) => {
       const item = element("li", "file-chip");
       item.append(element("span", "", file.name));
@@ -339,9 +478,15 @@
     syncFilePanel();
     writeViewState();
   });
+  viewFilter.addEventListener("change", () => {
+    procurementFilter.value = "__ALL__";
+    categoryFilter.value = "__ALL__";
+    amazonStatusFilter.value = "__ALL__";
+    renderState();
+    writeViewState();
+  });
   [procurementFilter, categoryFilter, amazonStatusFilter].forEach((filter) => filter.addEventListener("change", () => {
-    const rows = loadedFiles.flatMap((file) => file.rows);
-    render(rows, loadedFiles);
+    render(currentRows(), loadedFiles);
     writeViewState();
   }));
 
@@ -351,6 +496,10 @@
     input.disabled = true;
     loadedFiles = [];
     filesExpanded = false;
+    viewFilter.value = "all";
+    procurementFilter.value = "__ALL__";
+    categoryFilter.value = "__ALL__";
+    amazonStatusFilter.value = "__ALL__";
     errors.replaceChildren(); selectedFiles.replaceChildren(); fileControls.hidden = true;
     summary.textContent = "読み込み中…"; cards.replaceChildren();
     for (const [index, file] of files.entries()) {
@@ -384,11 +533,13 @@
   window.addEventListener("pagehide", () => {
     writeViewState();
     writePersistedFiles().catch(() => {});
+    writePersistedFavorites().catch(() => {});
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       writeViewState();
       writePersistedFiles().catch(() => {});
+      writePersistedFavorites().catch(() => {});
     }
   });
 

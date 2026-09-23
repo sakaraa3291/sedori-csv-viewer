@@ -213,3 +213,17 @@ test("Amazon status filter and counts work with category filters", () => {
   assert.deepEqual(MobileCsv.filterRows(rows, "__ALL__", "__ALL__", "present").map(row => row.asin), ["B"]);
   assert.deepEqual(MobileCsv.filterRows(rows, "__ALL__", "Beauty", "unknown").map(row => row.asin), ["D"]);
 });
+
+test("favorite key prefers ASIN then JAN and is stable across duplicate rows", () => {
+  assert.equal(MobileCsv.favoriteKey({ asin: "b0abc12345", jan: "4900000000000", fileName: "a.csv", line: 2 }), "asin:B0ABC12345");
+  assert.equal(MobileCsv.favoriteKey({ asin: "", jan: "4900000000000", fileName: "a.csv", line: 2 }), "jan:4900000000000");
+  assert.equal(MobileCsv.favoriteKey({ asin: "", jan: "", fileName: "a.csv", line: 7 }), "row:a.csv:7");
+  assert.equal(MobileCsv.favoriteKey({ asin: "B0ABC12345", fileName: "p01.csv", line: 2 }),
+    MobileCsv.favoriteKey({ asin: "B0ABC12345", fileName: "p09.csv", line: 99 }));
+});
+
+test("favorite memo is capped at 50 characters without trimming content", () => {
+  const source = "あ".repeat(55);
+  assert.equal(MobileCsv.normalizeMemo(source).length, 50);
+  assert.equal(MobileCsv.normalizeMemo("  店舗在庫を確認  "), "  店舗在庫を確認  ");
+});

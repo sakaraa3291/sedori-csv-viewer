@@ -243,9 +243,24 @@
     return filterRows(rows, "__ALL__", category);
   }
 
+  function favoriteKey(row) {
+    const asin = String((row || {}).asin || "").trim().toUpperCase();
+    if (asin) return `asin:${asin}`;
+    const jan = String((row || {}).jan || "").trim();
+    if (jan) return `jan:${jan}`;
+    const fileName = String((row || {}).fileName || "").trim();
+    const line = String((row || {}).line || "").trim();
+    return `row:${fileName}:${line}`;
+  }
+
+  function normalizeMemo(value, maxLength = 50) {
+    const limit = Number.isInteger(maxLength) && maxLength > 0 ? maxLength : 50;
+    return String(value == null ? "" : value).slice(0, limit);
+  }
+
   function withoutFile(files, fileId) {
     return files.filter((file) => file.id !== fileId);
   }
 
-  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, withoutFile };
+  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, favoriteKey, normalizeMemo, withoutFile };
 });

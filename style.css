@@ -46,7 +46,7 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 
 #category-controls { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 8px 10px; margin-top: 10px; }
 #category-controls label { color: #cbd5e1; font-size: .84rem; font-weight: 700; }
-#category-filter, #procurement-filter, #amazon-status-filter { min-height: 44px; width: 100%; border: 1px solid #334155; border-radius: 10px; background: #111c2f; color: #f8fafc; padding: 0 12px; font: inherit; }
+#view-filter, #category-filter, #procurement-filter, #amazon-status-filter { min-height: 44px; width: 100%; border: 1px solid #334155; border-radius: 10px; background: #111c2f; color: #f8fafc; padding: 0 12px; font: inherit; }
 .category-badge { display: inline-flex; max-width: 100%; margin: 0 0 5px; padding: 4px 8px; border-radius: 999px; background: #1e293b; color: #bfdbfe; font-size: .75rem; font-weight: 700; overflow-wrap: anywhere; }
 
 .category-badges { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 5px; }
@@ -64,3 +64,12 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 .amazon-unknown { background: #334155; color: #e2e8f0; border: 1px solid #64748b; }
 
 .stale-data-warning { padding: 8px 10px; border: 1px solid #f59e0b; border-radius: 10px; background: #422006; color: #fde68a; font-weight: 700; }
+
+.favorite-toggle { min-height: 36px; padding: 5px 9px; border: 1px solid #475569; border-radius: 10px; background: #1e293b; color: #cbd5e1; font: inherit; font-size: .75rem; font-weight: 800; cursor: pointer; }
+.favorite-toggle.is-favorite { border-color: #f59e0b; background: #78350f; color: #fef3c7; }
+.favorite-memo { margin: 7px 0 8px; }
+.favorite-memo-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.favorite-memo-label { color: #fef3c7; font-size: .75rem; font-weight: 800; }
+.favorite-memo-count { color: #94a3b8; font-size: .7rem; }
+.favorite-memo-input { width: 100%; min-height: 58px; resize: vertical; border: 1px solid #475569; border-radius: 10px; background: #0f172a; color: #f8fafc; padding: 8px 9px; font: inherit; font-size: .82rem; line-height: 1.35; }
+.favorite-memo-input:focus { outline: 2px solid #f59e0b; outline-offset: 1px; }
