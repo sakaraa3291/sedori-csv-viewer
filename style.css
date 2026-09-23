@@ -62,3 +62,5 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 .amazon-absent { background: #14532d; color: #dcfce7; border: 1px solid #22c55e; }
 .amazon-present { background: #78350f; color: #fef3c7; border: 1px solid #f59e0b; }
 .amazon-unknown { background: #334155; color: #e2e8f0; border: 1px solid #64748b; }
+
+.stale-data-warning { padding: 8px 10px; border: 1px solid #f59e0b; border-radius: 10px; background: #422006; color: #fde68a; font-weight: 700; }

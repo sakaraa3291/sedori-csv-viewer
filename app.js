@@ -22,6 +22,7 @@
   const DB_STORE = "state";
   const DB_KEY = "current-session";
   const VIEW_KEY = "sedori-csv-card-view";
+  const NORMALIZER_VERSION = 2;
 
   function openStateDb() {
     return new Promise((resolve, reject) => {
@@ -101,7 +102,19 @@
     filesExpanded = view.filesExpanded === true;
     try {
       const saved = await readPersistedFiles();
-      if (saved && Array.isArray(saved.loadedFiles)) loadedFiles = saved.loadedFiles;
+      if (saved && Array.isArray(saved.loadedFiles)) {
+        loadedFiles = saved.loadedFiles.map((file) => {
+          if (file && typeof file.rawText === "string" && file.normalizerVersion !== NORMALIZER_VERSION) {
+            try {
+              return { ...file, rows: MobileCsv.normalizeCsv(file.rawText, file.name),
+                errors: [], normalizerVersion: NORMALIZER_VERSION };
+            } catch (error) {
+              return { ...file, errors: [error.message || "保存CSVの再解析に失敗しました"] };
+            }
+          }
+          return file;
+        });
+      }
     } catch (_) { loadedFiles = []; }
     renderState();
     const rows = loadedFiles.flatMap((file) => file.rows);
@@ -287,6 +300,12 @@
     }
     amazonStatusFilter.value = ["__ALL__", "absent", "present", "unknown"].includes(currentAmazon) ? currentAmazon : "__ALL__";
     categoryControls.hidden = rows.length === 0;
+    const legacyAmazonFiles = loadedFiles.filter((file) => Array.isArray(file.rows) &&
+      file.rows.some((row) => !Object.prototype.hasOwnProperty.call(row, "amazonStatus")));
+    if (legacyAmazonFiles.length) {
+      errors.append(element("li", "stale-data-warning",
+        `Amazon状態追加前に読み込んだCSVが${legacyAmazonFiles.length}件あります。Amazon絞り込みを使うには現在のCSVを再選択してください。`));
+    }
     loadedFiles.forEach((file) => {
       const item = element("li", "file-chip");
       item.append(element("span", "", file.name));
@@ -336,9 +355,10 @@
     summary.textContent = "読み込み中…"; cards.replaceChildren();
     for (const [index, file] of files.entries()) {
       const id = `${Date.now()}-${index}`;
-      const entry = { id, name: file.name, rows: [], errors: [] };
+      const entry = { id, name: file.name, rows: [], errors: [], rawText: "", normalizerVersion: NORMALIZER_VERSION };
       try {
-        entry.rows = MobileCsv.normalizeCsv(await readFile(file), file.name);
+        entry.rawText = await readFile(file);
+        entry.rows = MobileCsv.normalizeCsv(entry.rawText, file.name);
       }
       catch (error) {
         entry.errors.push(error.fileName ? error.message
