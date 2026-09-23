@@ -484,6 +484,9 @@
         stores.append(chips); body.append(stores);
       }
       const facts = element("div", "facts");
+      const priority = String(row.grade || "").trim().toUpperCase();
+      facts.append(element("div", `fact priority-fact priority-${priority || "none"}`,
+        `リサーチ優先度 ${priority || "未判定"}`));
       facts.append(element("div", "fact", `現在価格 ${numberText(row.currentPriceYen, "円")}`));
       facts.append(element("div", "fact", `ランキング ${numberText(row.categoryRank, "位")}`));
       body.append(facts);

@@ -96,3 +96,11 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 .favorites-empty { padding: 8px 4px; color: #94a3b8; font-size: .82rem; }
 #favorites-export { width: 100%; min-height: 44px; margin-top: 10px; background: #0f766e; }
 #favorites-export:disabled, #favorites-show-all:disabled { opacity: .45; cursor: default; }
+
+.priority-fact { display: inline-flex; width: fit-content; align-items: center; min-height: 28px; padding: 4px 8px; border-radius: 8px; background: #1e293b; color: #e2e8f0; font-size: .78rem; }
+.priority-S { background: #7f1d1d; color: #fee2e2; }
+.priority-A { background: #7c2d12; color: #ffedd5; }
+.priority-B { background: #713f12; color: #fef9c3; }
+.priority-C { background: #0c4a6e; color: #e0f2fe; }
+.priority-D { background: #334155; color: #e2e8f0; }
+.priority-none { color: #94a3b8; }
