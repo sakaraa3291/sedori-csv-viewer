@@ -73,3 +73,7 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 .favorite-memo-count { color: #94a3b8; font-size: .7rem; }
 .favorite-memo-input { width: 100%; min-height: 58px; resize: vertical; border: 1px solid #475569; border-radius: 10px; background: #0f172a; color: #f8fafc; padding: 8px 9px; font: inherit; font-size: .82rem; line-height: 1.35; }
 .favorite-memo-input:focus { outline: 2px solid #f59e0b; outline-offset: 1px; }
+
+.favorite-genre-heading { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 2px -2px; padding: 9px 11px; border-left: 4px solid #f59e0b; border-radius: 8px; background: #172033; }
+.favorite-genre-title { color: #fef3c7; font-size: .95rem; }
+.favorite-genre-count { color: #cbd5e1; font-size: .78rem; font-weight: 700; }

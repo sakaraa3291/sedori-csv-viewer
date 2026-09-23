@@ -106,11 +106,19 @@
   }
 
   function favoriteRows() {
-    return Object.values(favorites).map((record) => ({
-      ...record.row,
-      favoriteMemo: record.memo || "",
-      favoriteCreatedAt: record.createdAt || 0,
-    })).sort((a, b) => (b.favoriteCreatedAt || 0) - (a.favoriteCreatedAt || 0));
+    return Object.values(favorites).map((record) => {
+      const row = { ...(record.row || {}) };
+      const category = row.category || "未分類";
+      row.category = category;
+      row.procurementCategory = row.procurementCategory && row.procurementCategory !== "未分類"
+        ? row.procurementCategory
+        : MobileCsv.procurementCategory(category);
+      return {
+        ...row,
+        favoriteMemo: record.memo || "",
+        favoriteCreatedAt: record.createdAt || 0,
+      };
+    }).sort((a, b) => (b.favoriteCreatedAt || 0) - (a.favoriteCreatedAt || 0));
   }
 
   function currentRows() {
@@ -251,6 +259,10 @@
     const snapshot = { ...row };
     delete snapshot.favoriteMemo;
     delete snapshot.favoriteCreatedAt;
+    snapshot.category = snapshot.category || "未分類";
+    snapshot.procurementCategory = snapshot.procurementCategory && snapshot.procurementCategory !== "未分類"
+      ? snapshot.procurementCategory
+      : MobileCsv.procurementCategory(snapshot.category);
     if (Array.isArray(row.recommendedStores)) snapshot.recommendedStores = row.recommendedStores.slice();
     return snapshot;
   }
@@ -301,7 +313,26 @@
         : "CSVを選択してください";
     }
     const fragment = document.createDocumentFragment();
-    visibleRows.forEach((row) => {
+    let rowsToRender = visibleRows;
+    let genreCounts = new Map();
+    if (viewFilter.value === "favorites") {
+      const orderedGenres = MobileCsv.categoryCounts(visibleRows, "procurementCategory");
+      genreCounts = new Map(orderedGenres.map((item) => [item.category, item.count]));
+      rowsToRender = orderedGenres.flatMap(({ category }) =>
+        visibleRows.filter((row) => (row.procurementCategory || "未分類") === category));
+    }
+    let lastGenre = null;
+    rowsToRender.forEach((row) => {
+      if (viewFilter.value === "favorites") {
+        const genre = row.procurementCategory || "未分類";
+        if (genre !== lastGenre) {
+          const heading = element("div", "favorite-genre-heading");
+          heading.append(element("strong", "favorite-genre-title", genre));
+          heading.append(element("span", "favorite-genre-count", `${genreCounts.get(genre) || 0}件`));
+          fragment.append(heading);
+          lastGenre = genre;
+        }
+      }
       const card = element("article", "card");
       const media = element("div", "media");
       if (row.imageUrl) {
@@ -393,6 +424,8 @@
     const loadedRows = loadedFiles.flatMap((file) => file.rows);
     const favoriteList = favoriteRows();
     const currentView = viewFilter.value === "favorites" ? "favorites" : "all";
+    const procurementLabel = document.querySelector("#procurement-label");
+    if (procurementLabel) procurementLabel.textContent = currentView === "favorites" ? "お気に入りジャンル" : "仕入れカテゴリー";
     viewFilter.replaceChildren();
     const allView = element("option", "", `全商品（${loadedRows.length.toLocaleString("ja-JP")}）`);
     allView.value = "all"; viewFilter.append(allView);
