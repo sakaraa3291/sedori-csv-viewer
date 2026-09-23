@@ -5,6 +5,9 @@
   const errors = document.querySelector("#errors");
   const cards = document.querySelector("#cards");
   const fileControls = document.querySelector("#file-controls");
+  const fileToggle = document.querySelector("#file-toggle");
+  const fileToggleLabel = document.querySelector("#file-toggle-label");
+  const filePanel = document.querySelector("#file-panel");
   const selectedFiles = document.querySelector("#selected-files");
   const clearAll = document.querySelector("#clear-all");
   const categoryControls = document.querySelector("#category-controls");
@@ -13,6 +16,7 @@
   let loadedFiles = [];
   let persistTimer = null;
   let restoreComplete = false;
+  let filesExpanded = false;
   const DB_NAME = "sedori-csv-card";
   const DB_STORE = "state";
   const DB_KEY = "current-session";
@@ -76,6 +80,7 @@
       localStorage.setItem(VIEW_KEY, JSON.stringify({
         procurement: procurementFilter.value || "__ALL__",
         category: categoryFilter.value || "__ALL__",
+        filesExpanded,
         scrollY: Math.max(0, Math.round(window.scrollY || 0)),
       }));
     } catch (_) { /* Safari private mode/storage failure: continue without view restore. */ }
@@ -91,6 +96,7 @@
 
   async function restorePersistedState() {
     const view = readViewState();
+    filesExpanded = view.filesExpanded === true;
     try {
       const saved = await readPersistedFiles();
       if (saved && Array.isArray(saved.loadedFiles)) loadedFiles = saved.loadedFiles;
@@ -161,13 +167,20 @@
     }
   }
 
+  function syncFilePanel() {
+    const count = loadedFiles.length;
+    fileToggleLabel.textContent = `選択中CSV ${count}件`;
+    fileToggle.setAttribute("aria-expanded", String(filesExpanded));
+    filePanel.hidden = !filesExpanded;
+  }
+
   function render(rows, files) {
     cards.replaceChildren();
     const visibleRows = MobileCsv.filterRows(rows, procurementFilter.value, categoryFilter.value);
     const duplicates = MobileCsv.duplicateCounts(rows);
     const filtered = procurementFilter.value !== "__ALL__" || categoryFilter.value !== "__ALL__";
     summary.textContent = files.length
-      ? `${files.map((file) => file.name).join("、")}｜総取込 ${rows.length.toLocaleString("ja-JP")}行` +
+      ? `${files.length === 1 ? files[0].name : `${files.length}ファイル`}｜総取込 ${rows.length.toLocaleString("ja-JP")}行` +
         (filtered ? `｜表示 ${visibleRows.length.toLocaleString("ja-JP")}行` : "")
       : "CSVを選択してください";
     const fragment = document.createDocumentFragment();
@@ -229,6 +242,8 @@
     const rows = loadedFiles.flatMap((file) => file.rows);
     selectedFiles.replaceChildren(); errors.replaceChildren();
     fileControls.hidden = loadedFiles.length === 0;
+    if (!loadedFiles.length) filesExpanded = false;
+    syncFilePanel();
     const procurementCounts = MobileCsv.categoryCounts(rows, "procurementCategory");
     const categoryCounts = MobileCsv.categoryCounts(rows, "category");
     const currentProcurement = procurementFilter.value;
@@ -267,6 +282,7 @@
 
   function reset() {
     loadedFiles = [];
+    filesExpanded = false;
     input.value = "";
     renderState();
     try { localStorage.removeItem(VIEW_KEY); } catch (_) {}
@@ -274,6 +290,11 @@
   }
 
   clearAll.addEventListener("click", reset);
+  fileToggle.addEventListener("click", () => {
+    filesExpanded = !filesExpanded;
+    syncFilePanel();
+    writeViewState();
+  });
   [procurementFilter, categoryFilter].forEach((filter) => filter.addEventListener("change", () => {
     const rows = loadedFiles.flatMap((file) => file.rows);
     render(rows, loadedFiles);
@@ -285,6 +306,7 @@
     if (!files.length) return;
     input.disabled = true;
     loadedFiles = [];
+    filesExpanded = false;
     errors.replaceChildren(); selectedFiles.replaceChildren(); fileControls.hidden = true;
     summary.textContent = "読み込み中…"; cards.replaceChildren();
     for (const [index, file] of files.entries()) {

@@ -7,12 +7,16 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 .picker, .keepa { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border-radius: 12px; font-weight: 700; text-decoration: none; }
 .picker { width: 100%; background: #38bdf8; color: #082f49; }
 #summary { margin: 10px 2px 0; color: #cbd5e1; font-size: .84rem; overflow-wrap: anywhere; }
-#file-controls { margin-top: 8px; }
-#selected-files { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.file-chip { display: flex; min-width: 0; align-items: center; padding-left: 12px; border-radius: 12px; background: #1e293b; color: #e2e8f0; font-size: .84rem; overflow-wrap: anywhere; }
-.remove-file, #clear-all { min-width: 44px; min-height: 44px; border: 0; border-radius: 10px; color: white; font: inherit; font-weight: 700; cursor: pointer; }
-.remove-file { margin-left: 6px; background: #475569; font-size: 1.35rem; }
-#clear-all { width: 100%; margin-top: 8px; background: #b91c1c; }
+#file-controls { margin-top: 6px; }
+#file-toggle { display: flex; width: 100%; min-height: 36px; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border: 1px solid #334155; border-radius: 10px; background: #162236; color: #e2e8f0; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
+.file-toggle-mark { flex: 0 0 auto; transition: transform .16s ease; }
+#file-toggle[aria-expanded="true"] .file-toggle-mark { transform: rotate(180deg); }
+#file-panel { margin-top: 6px; }
+#selected-files { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.file-chip { display: flex; min-width: 0; align-items: center; padding-left: 9px; border-radius: 10px; background: #1e293b; color: #e2e8f0; font-size: .78rem; overflow-wrap: anywhere; }
+.remove-file, #clear-all { min-width: 38px; min-height: 38px; border: 0; border-radius: 9px; color: white; font: inherit; font-weight: 700; cursor: pointer; }
+.remove-file { margin-left: 5px; background: #475569; font-size: 1.1rem; }
+#clear-all { width: 100%; margin-top: 6px; background: #b91c1c; font-size: .84rem; }
 .errors { margin: 8px 0 0; padding-left: 20px; color: #fca5a5; font-size: .86rem; }
 #cards { display: grid; gap: 12px; padding: 8px 0 24px; }
 .card { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 13px; padding: 12px; border: 1px solid #263348; border-radius: 16px; background: #111c2f; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
