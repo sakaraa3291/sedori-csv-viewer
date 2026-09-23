@@ -195,3 +195,21 @@ test("observed Japanese media and hobby roots map correctly", () => {
   assert.equal(MobileCsv.procurementCategory("手芸・画材"), "ホビー");
   assert.equal(MobileCsv.procurementCategory("Amazonデバイス・アクセサリ"), "家電");
 });
+
+test("Amazon presence fields normalize to absent present and unknown", () => {
+  const rows = normalizeCsv(
+    "asin,amazon_present,amazon_absent,Amazon状態\n" +
+    "A,False,,\nB,True,,\nC,,1,\nD,,0,\nE,,,不在\nF,,,あり\nG,,,\n", "amazon.csv");
+  assert.deepEqual(rows.map(row => row.amazonStatus), [
+    "absent", "present", "absent", "present", "absent", "present", "unknown",
+  ]);
+});
+
+test("Amazon status filter and counts work with category filters", () => {
+  const rows = normalizeCsv(
+    "asin,category,amazon_present\nA,Electronics,False\nB,Electronics,True\nC,Beauty,False\nD,Beauty,\n", "amazon.csv");
+  assert.deepEqual(MobileCsv.amazonStatusCounts(rows), { absent: 2, present: 1, unknown: 1 });
+  assert.deepEqual(MobileCsv.filterRows(rows, "家電", "__ALL__", "absent").map(row => row.asin), ["A"]);
+  assert.deepEqual(MobileCsv.filterRows(rows, "__ALL__", "__ALL__", "present").map(row => row.asin), ["B"]);
+  assert.deepEqual(MobileCsv.filterRows(rows, "__ALL__", "Beauty", "unknown").map(row => row.asin), ["D"]);
+});

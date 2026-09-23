@@ -112,6 +112,34 @@
     return (STORE_CANDIDATES[procurement] || STORE_CANDIDATES["未分類"]).slice();
   }
 
+  function parseBoolean(value) {
+    const text = String(value == null ? "" : value).trim().toLowerCase();
+    if (["1", "true", "yes", "y", "あり", "在庫あり", "amazonあり", "amazon本体あり"].includes(text)) return true;
+    if (["0", "false", "no", "n", "なし", "不在", "在庫切れ", "amazon不在", "amazon本体不在"].includes(text)) return false;
+    return null;
+  }
+
+  function amazonStatusFromRaw(raw) {
+    const presentKeys = ["amazon_present", "amazonPresent", "Amazon本体", "Amazon本体在庫", "Amazon在庫"];
+    for (const key of presentKeys) {
+      if (Object.prototype.hasOwnProperty.call(raw, key) && String(raw[key]).trim() !== "") {
+        const value = parseBoolean(raw[key]);
+        if (value !== null) return value ? "present" : "absent";
+      }
+    }
+    const absentKeys = ["amazon_absent", "amazonAbsent", "Amazon不在", "Amazon本体不在"];
+    for (const key of absentKeys) {
+      if (Object.prototype.hasOwnProperty.call(raw, key) && String(raw[key]).trim() !== "") {
+        const value = parseBoolean(raw[key]);
+        if (value !== null) return value ? "absent" : "present";
+      }
+    }
+    const status = String(raw.amazon_status || raw["Amazon状態"] || "").trim().toLowerCase();
+    if (["absent", "不在", "在庫切れ", "amazon不在"].includes(status)) return "absent";
+    if (["present", "あり", "在庫あり", "amazonあり"].includes(status)) return "present";
+    return "unknown";
+  }
+
   function normalizeRows(text, fileName) {
     const parsed = parseCsv(text);
     if (!parsed.length) return [];
@@ -136,6 +164,7 @@
       const explicitProcurement = (raw.procurement_category || raw["仕入れカテゴリー"] || raw["大分類"] || "").trim();
       const procurement = procurementCategory(category, explicitProcurement);
       const explicitStores = (raw.recommended_stores || raw["推奨仕入れ店舗"] || raw["仕入れ店舗候補"] || "").trim();
+      const amazonStatus = amazonStatusFromRaw(raw);
       rows.push({
         asin,
         jan,
@@ -146,6 +175,7 @@
         category,
         procurementCategory: procurement,
         recommendedStores: recommendedStores(procurement, explicitStores),
+        amazonStatus,
         imageUrl: /^https?:\/\//i.test(image) ? image : fallbackImage,
         keepaUrl: /^https:\/\/(?:www\.)?keepa\.com\//i.test(suppliedKeepa)
           ? suppliedKeepa
@@ -188,14 +218,25 @@
         : a.category.localeCompare(b.category, "ja"));
   }
 
-  function filterRows(rows, procurement, category) {
+  function filterRows(rows, procurement, category, amazonStatus = "__ALL__") {
     return rows.filter((row) => {
       const procurementOk = !procurement || procurement === "__ALL__" ||
         (row.procurementCategory || "未分類") === procurement;
       const categoryOk = !category || category === "__ALL__" ||
         (row.category || "未分類") === category;
-      return procurementOk && categoryOk;
+      const amazonOk = !amazonStatus || amazonStatus === "__ALL__" ||
+        (row.amazonStatus || "unknown") === amazonStatus;
+      return procurementOk && categoryOk && amazonOk;
     });
+  }
+
+  function amazonStatusCounts(rows) {
+    const counts = { absent: 0, present: 0, unknown: 0 };
+    rows.forEach((row) => {
+      const status = ["absent", "present"].includes(row.amazonStatus) ? row.amazonStatus : "unknown";
+      counts[status] += 1;
+    });
+    return counts;
   }
 
   function filterByCategory(rows, category) {
@@ -206,5 +247,5 @@
     return files.filter((file) => file.id !== fileId);
   }
 
-  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, withoutFile };
+  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, withoutFile };
 });

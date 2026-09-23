@@ -13,6 +13,7 @@
   const categoryControls = document.querySelector("#category-controls");
   const procurementFilter = document.querySelector("#procurement-filter");
   const categoryFilter = document.querySelector("#category-filter");
+  const amazonStatusFilter = document.querySelector("#amazon-status-filter");
   let loadedFiles = [];
   let persistTimer = null;
   let restoreComplete = false;
@@ -80,6 +81,7 @@
       localStorage.setItem(VIEW_KEY, JSON.stringify({
         procurement: procurementFilter.value || "__ALL__",
         category: categoryFilter.value || "__ALL__",
+        amazonStatus: amazonStatusFilter.value || "__ALL__",
         filesExpanded,
         scrollY: Math.max(0, Math.round(window.scrollY || 0)),
       }));
@@ -108,6 +110,9 @@
     }
     if (Array.from(categoryFilter.options).some((option) => option.value === view.category)) {
       categoryFilter.value = view.category;
+    }
+    if (Array.from(amazonStatusFilter.options).some((option) => option.value === view.amazonStatus)) {
+      amazonStatusFilter.value = view.amazonStatus;
     }
     render(rows, loadedFiles);
     if (Number.isFinite(view.scrollY) && view.scrollY > 0) {
@@ -176,9 +181,9 @@
 
   function render(rows, files) {
     cards.replaceChildren();
-    const visibleRows = MobileCsv.filterRows(rows, procurementFilter.value, categoryFilter.value);
+    const visibleRows = MobileCsv.filterRows(rows, procurementFilter.value, categoryFilter.value, amazonStatusFilter.value);
     const duplicates = MobileCsv.duplicateCounts(rows);
-    const filtered = procurementFilter.value !== "__ALL__" || categoryFilter.value !== "__ALL__";
+    const filtered = procurementFilter.value !== "__ALL__" || categoryFilter.value !== "__ALL__" || amazonStatusFilter.value !== "__ALL__";
     summary.textContent = files.length
       ? `${files.length === 1 ? files[0].name : `${files.length}ファイル`}｜総取込 ${rows.length.toLocaleString("ja-JP")}行` +
         (filtered ? `｜表示 ${visibleRows.length.toLocaleString("ja-JP")}行` : "")
@@ -201,6 +206,9 @@
       const duplicate = duplicates.get(row.asin) || 0;
       if (duplicate > 1) top.append(element("small", "duplicate", `重複 ${duplicate}件`));
       body.append(top);
+      const amazonBadge = element("div", `amazon-status amazon-${row.amazonStatus || "unknown"}`,
+        row.amazonStatus === "absent" ? "Amazon不在" : row.amazonStatus === "present" ? "Amazonあり" : "Amazon不明");
+      body.append(amazonBadge);
       const codeRow = element("div", "code-row");
       if (row.jan) {
         codeRow.append(element("span", "jan", `JAN ${row.jan}`));
@@ -266,6 +274,18 @@
     const categoryValues = new Set(["__ALL__", ...categoryCounts.map((item) => item.category)]);
     procurementFilter.value = procurementValues.has(currentProcurement) ? currentProcurement : "__ALL__";
     categoryFilter.value = categoryValues.has(currentCategory) ? currentCategory : "__ALL__";
+    const currentAmazon = amazonStatusFilter.value;
+    const statusCounts = MobileCsv.amazonStatusCounts(rows);
+    amazonStatusFilter.replaceChildren();
+    for (const [value, label, count] of [
+      ["__ALL__", "すべて", rows.length],
+      ["absent", "Amazon不在", statusCounts.absent],
+      ["present", "Amazonあり", statusCounts.present],
+      ["unknown", "不明", statusCounts.unknown],
+    ]) {
+      const option = element("option", "", `${label}（${count}）`); option.value = value; amazonStatusFilter.append(option);
+    }
+    amazonStatusFilter.value = ["__ALL__", "absent", "present", "unknown"].includes(currentAmazon) ? currentAmazon : "__ALL__";
     categoryControls.hidden = rows.length === 0;
     loadedFiles.forEach((file) => {
       const item = element("li", "file-chip");
@@ -300,7 +320,7 @@
     syncFilePanel();
     writeViewState();
   });
-  [procurementFilter, categoryFilter].forEach((filter) => filter.addEventListener("change", () => {
+  [procurementFilter, categoryFilter, amazonStatusFilter].forEach((filter) => filter.addEventListener("change", () => {
     const rows = loadedFiles.flatMap((file) => file.rows);
     render(rows, loadedFiles);
     writeViewState();
