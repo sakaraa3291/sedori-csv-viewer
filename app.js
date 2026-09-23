@@ -229,9 +229,14 @@
       facts.append(element("div", "fact", `現在価格 ${numberText(row.currentPriceYen, "円")}`));
       facts.append(element("div", "fact", `ランキング ${numberText(row.categoryRank, "位")}`));
       body.append(facts);
+      const actions = element("div", "research-links");
       if (row.keepaUrl) {
-        const link = element("a", "keepa", "Keepaで見る"); link.href = row.keepaUrl; link.target = "_blank"; link.rel = "noopener noreferrer"; body.append(link);
+        const link = element("a", "keepa", "Keepaで見る"); link.href = row.keepaUrl; link.target = "_blank"; link.rel = "noopener noreferrer"; actions.append(link);
       }
+      if (row.monotracerUrl) {
+        const link = element("a", "monotracer", "モノトレーサー"); link.href = row.monotracerUrl; link.target = "_blank"; link.rel = "noopener noreferrer"; actions.append(link);
+      }
+      if (actions.childNodes.length) body.append(actions);
       body.append(element("small", "source", `${row.fileName}・論理行${row.line}`));
       card.append(media, body); fragment.append(card);
     });

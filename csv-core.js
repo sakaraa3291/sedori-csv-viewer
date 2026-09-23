@@ -150,6 +150,8 @@
         keepaUrl: /^https:\/\/(?:www\.)?keepa\.com\//i.test(suppliedKeepa)
           ? suppliedKeepa
           : (asin ? `https://keepa.com/#!product/5-${encodeURIComponent(asin)}` : ""),
+        monotracerUrl: /^[A-Z0-9]{10}$/.test(asin)
+          ? `https://www.mono-tracer.com/#/product/${encodeURIComponent(asin)}` : "",
         fileName,
         line: entry.line,
       });

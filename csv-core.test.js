@@ -37,6 +37,13 @@ test("Keepa URL is generated from ASIN and valid supplied URL wins", () => {
   assert.equal(supplied.keepaUrl, "https://keepa.com/custom");
 });
 
+test("MonoTracer URL is generated only for a valid ASIN", () => {
+  const [valid] = normalizeCsv("asin\nB000000001\n", "mono.csv");
+  const [invalid] = normalizeCsv("asin\nBAD\n", "mono-invalid.csv");
+  assert.equal(valid.monotracerUrl, "https://www.mono-tracer.com/#/product/B000000001");
+  assert.equal(invalid.monotracerUrl, "");
+});
+
 test("missing image stays blank", () => {
   const [row] = normalizeCsv("asin,image_url\nX,\n", "empty.csv");
   assert.equal(row.imageUrl, "");
