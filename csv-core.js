@@ -289,6 +289,69 @@
     });
   }
 
+  const PREMIUM_TEMPLATE_FIELDS = [
+    "premium_template_gate", "premium_template_strength", "premium_template_reason", "premium_need_fit",
+  ];
+
+  // Independent of premium score/rank. Keep rules and reasons aligned with premium.py.
+  function calculatePremiumTemplate(input = {}) {
+    const number = finiteNumber(input.categoryRank);
+    const rank = number !== null && number > 0 ? number : null;
+    const successor = normalizeSuccessorStatus(input.successorStatus);
+    const need = normalizeNeedType(input.needType);
+    const needLimit = { minus_to_zero: 7000, zero_to_plus: 5000 }[need];
+    const fit = rank === null ? "UNKNOWN" : need === "neutral" ? "NEUTRAL"
+      : needLimit == null ? "UNKNOWN" : rank <= needLimit ? "FIT" : "OUT";
+    let gate = "UNKNOWN", strength = "UNKNOWN", reason;
+    if (rank === null) {
+      reason = "ランキング不明のため未判定";
+    } else if (successor === "none" || successor === "major_change") {
+      const limit = successor === "none" ? 10000 : 5000;
+      const label = successor === "none" ? "後継品なし" : "後継品大幅変更";
+      if (rank <= limit) {
+        gate = "MATCH";
+        strength = rank <= 3000 ? "STRONG" : "MATCH";
+        reason = `${label}・${strength === "STRONG" ? 3000 : limit}位以内`;
+      } else {
+        gate = strength = "OUT";
+        reason = `${label}・${limit}位超`;
+      }
+    } else if (successor === "similar") {
+      if (rank <= 999 && normalizeLevel(input.reviewDependency) === "high") {
+        gate = "MATCH";
+        strength = "EXCEPTION";
+        reason = "後継品ほぼ同じ・999位以内・レビュー依存度高の例外";
+      } else {
+        gate = strength = "OUT";
+        reason = "後継品ほぼ同じ・例外条件に非該当";
+      }
+    } else if (rank > 10000) {
+      gate = strength = "OUT";
+      reason = "後継品不明・10000位超";
+    } else {
+      reason = "後継品不明のため未判定";
+    }
+    if (gate === "MATCH" && fit === "OUT") {
+      gate = strength = "OUT";
+      reason += `／必要性条件の${needLimit}位超で非該当`;
+    } else if (gate === "MATCH" && fit === "UNKNOWN") {
+      reason += "／必要性は未判定";
+    }
+    return { premium_template_gate: gate, premium_template_strength: strength,
+      premium_template_reason: reason, premium_need_fit: fit };
+  }
+
+  // Preserve explicit fields, including UNKNOWN and blank values, during restore.
+  function premiumTemplateForRow(row, explicit = row) {
+    const result = calculatePremiumTemplate(row);
+    const aliases = ["元note判定", "元note強度", "元note理由", "必要性適合"];
+    PREMIUM_TEMPLATE_FIELDS.forEach((key, index) => {
+      const source = [key, aliases[index]].find((name) => Object.prototype.hasOwnProperty.call(explicit, name));
+      if (source !== undefined) result[key] = String(explicit[source] ?? "").trim();
+    });
+    return result;
+  }
+
   function normalizeRows(text, fileName) {
     const parsed = parseCsv(text);
     if (!parsed.length) return [];
@@ -328,6 +391,7 @@
         recommendedStores: recommendedStores(procurement, explicitStores),
         amazonStatus,
         ...premium,
+        ...premiumTemplateForRow({ ...premium, categoryRank }, raw),
         imageUrl: /^https?:\/\//i.test(image) ? image : fallbackImage,
         keepaUrl: /^https:\/\/(?:www\.)?keepa\.com\//i.test(suppliedKeepa)
           ? suppliedKeepa
@@ -422,6 +486,7 @@
       "ASIN", "JAN", "メモ", "Amazon本体", "現在価格", "ランキング",
       "判定ランク", "プレミア期待度", "プレミアスコア", "プレミア注意",
       "Keepa URL", "モノトレーサーURL", "仕入れ店舗候補",
+      "元note判定", "元note強度", "元note理由", "必要性適合",
     ];
     const body = (rows || []).map((row) => [
       row.category || "未分類",
@@ -441,6 +506,7 @@
       row.keepaUrl || "",
       row.monotracerUrl || "",
       Array.isArray(row.recommendedStores) ? row.recommendedStores : [],
+      ...PREMIUM_TEMPLATE_FIELDS.map((key) => premiumTemplateForRow(row)[key]),
     ]);
     return "\uFEFF" + [headers, ...body].map((line) => line.map(csvCell).join(",")).join("\r\n") + "\r\n";
   }
@@ -449,5 +515,5 @@
     return files.filter((file) => file.id !== fileId);
   }
 
-  return { CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, calculatePremiumPotential, premiumPotentialFromRaw, favoriteKey, normalizeMemo, favoriteExportCsv, withoutFile };
+  return { PREMIUM_TEMPLATE_FIELDS, calculatePremiumTemplate, premiumTemplateForRow, CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, calculatePremiumPotential, premiumPotentialFromRaw, favoriteKey, normalizeMemo, favoriteExportCsv, withoutFile };
 });

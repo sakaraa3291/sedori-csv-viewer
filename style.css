@@ -112,3 +112,10 @@ h1 { margin: 0 0 14px; font-size: 1.35rem; }
 .premium-none { color: #94a3b8; }
 .premium-score { color: #dbeafe; font-size: .78rem; }
 .premium-note { width: fit-content; color: #fbbf24; font-size: .7rem; font-weight: 700; }
+
+.source-note { display: grid; gap: 4px; margin: 10px 0; padding: 9px 10px; border: 1px solid #475569; border-radius: 9px; background: #172033; overflow-wrap: anywhere; }
+.source-note-label { font-size: .8rem; line-height: 1.5; font-weight: 700; }
+.source-note-detail { display: block; color: #cbd5e1; font-size: .72rem; line-height: 1.5; }
+.source-note-match { border-color: #2dd4bf; background: #134e4a; color: #ccfbf1; }
+.source-note-out { border-color: #334155; background: #111827; color: #cbd5e1; }
+.source-note-unknown { color: #94a3b8; }

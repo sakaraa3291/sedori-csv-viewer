@@ -34,7 +34,7 @@
   const DB_KEY = "current-session";
   const FAVORITES_KEY = "favorites-v1";
   const VIEW_KEY = "sedori-csv-card-view";
-  const NORMALIZER_VERSION = 3;
+  const NORMALIZER_VERSION = 4;
   const MEMO_LIMIT = 50;
 
   function openStateDb() {
@@ -125,7 +125,9 @@
         row.premiumRank = current.premiumRank;
         row.premiumScore = current.premiumScore;
         row.premiumNote = current.premiumNote;
+        Object.assign(row, MobileCsv.premiumTemplateForRow(current));
       }
+      Object.assign(row, MobileCsv.premiumTemplateForRow(row));
       const category = row.category || "未分類";
       row.category = category;
       row.procurementCategory = row.procurementCategory && row.procurementCategory !== "未分類"
@@ -193,7 +195,9 @@
               return { ...file, errors: [error.message || "保存CSVの再解析に失敗しました"] };
             }
           }
-          return file;
+          return { ...file, rows: (file.rows || []).map((row) => ({
+            ...row, ...MobileCsv.premiumTemplateForRow(row),
+          })) };
         });
       }
       if (savedFavorites && savedFavorites.favorites && typeof savedFavorites.favorites === "object") {
@@ -506,6 +510,20 @@
       facts.append(element("div", "fact", `現在価格 ${numberText(row.currentPriceYen, "円")}`));
       facts.append(element("div", "fact", `ランキング ${numberText(row.categoryRank, "位")}`));
       body.append(facts);
+      const template = MobileCsv.premiumTemplateForRow(row);
+      const gate = ["MATCH", "OUT"].includes(template.premium_template_gate)
+        ? template.premium_template_gate : "UNKNOWN";
+      const strength = ["STRONG", "EXCEPTION"].includes(template.premium_template_strength)
+        ? ` / ${template.premium_template_strength}` : "";
+      const sourceNote = element("div", `source-note source-note-${gate.toLowerCase()}`);
+      sourceNote.append(element("div", "source-note-label",
+        `元note条件 ${gate === "UNKNOWN" ? "未判定" : gate}${strength}`));
+      if (template.premium_template_reason) {
+        sourceNote.append(element("small", "source-note-detail", template.premium_template_reason));
+      }
+      sourceNote.append(element("small", "source-note-detail",
+        `必要性適合 ${template.premium_need_fit || "UNKNOWN"}`));
+      body.append(sourceNote);
       const actions = element("div", "research-links");
       if (row.keepaUrl) {
         const link = element("a", "keepa", "Keepaで見る"); link.href = row.keepaUrl; link.target = "_blank"; link.rel = "noopener noreferrer"; actions.append(link);

@@ -321,3 +321,87 @@ test("favorite export adds premium rank score and note columns", () => {
   assert.ok(header.includes("判定ランク,プレミア期待度,プレミアスコア,プレミア注意,Keepa URL"));
   assert.ok(body.includes(",C,88,後継品がほぼ同じためC上限,"));
 });
+
+for (const [successor, rank, review, gate, strength] of [
+  ["none", 2500, "unknown", "MATCH", "STRONG"],
+  ["none", 8000, "unknown", "MATCH", "MATCH"],
+  ["none", 12000, "unknown", "OUT", "OUT"],
+  ["major_change", 4349, "unknown", "MATCH", "MATCH"],
+  ["major_change", 5001, "unknown", "OUT", "OUT"],
+  ["similar", 999, "high", "MATCH", "EXCEPTION"],
+  ["similar", 999, "medium", "OUT", "OUT"],
+  ["unknown", 4000, "unknown", "UNKNOWN", "UNKNOWN"],
+  ["unknown", 12000, "unknown", "OUT", "OUT"],
+  ["none", 3000, "unknown", "MATCH", "STRONG"],
+  ["none", 10000, "unknown", "MATCH", "MATCH"],
+  ["major_change", 3000, "unknown", "MATCH", "STRONG"],
+  ["major_change", 5000, "unknown", "MATCH", "MATCH"],
+  ["similar", 1000, "high", "OUT", "OUT"],
+  ["unknown", 10000, "unknown", "UNKNOWN", "UNKNOWN"],
+]) {
+  test(`source-note ${successor} ${rank}/${review}: ${gate}/${strength}`, () => {
+    const [row] = normalizeCsv(
+      `asin,successor_status,category_rank,review_dependency\nA,${successor},${rank},${review}\n`, "legacy.csv");
+    assert.equal(row.premium_template_gate, gate);
+    assert.equal(row.premium_template_strength, strength);
+    assert.equal(row.premium_need_fit, "UNKNOWN");
+    assert.ok(row.premium_template_reason);
+  });
+}
+
+test("source-note need boundaries and veto match Python independently of premium score", () => {
+  for (const [needType, categoryRank, fit, gate] of [
+    ["minus_to_zero", 7000, "FIT", "MATCH"], ["minus_to_zero", 7001, "OUT", "OUT"],
+    ["zero_to_plus", 5000, "FIT", "MATCH"], ["zero_to_plus", 5001, "OUT", "OUT"],
+    ["neutral", 8000, "NEUTRAL", "MATCH"], ["unknown", 8000, "UNKNOWN", "MATCH"],
+  ]) {
+    const input = Object.freeze({ successorStatus: "none", categoryRank, needType, premiumScore: 100 });
+    const result = MobileCsv.calculatePremiumTemplate(input);
+    assert.equal(result.premium_need_fit, fit);
+    assert.equal(result.premium_template_gate, gate);
+    assert.equal(result.premium_template_strength, gate);
+    if (fit === "OUT") assert.match(result.premium_template_reason, /必要性条件の.*位超で非該当/);
+    assert.deepEqual(MobileCsv.calculatePremiumTemplate(input), result);
+  }
+});
+
+test("source-note invalid or missing rank takes precedence over neutral need", () => {
+  for (const categoryRank of [null, undefined, "", "bad", 0, -1, Infinity]) {
+    assert.deepEqual(MobileCsv.calculatePremiumTemplate({ categoryRank, successorStatus: "none", needType: "neutral" }), {
+      premium_template_gate: "UNKNOWN", premium_template_strength: "UNKNOWN",
+      premium_template_reason: "ランキング不明のため未判定", premium_need_fit: "UNKNOWN",
+    });
+  }
+});
+
+test("explicit CSV template fields override fallback without affecting existing premium fields", () => {
+  const [row] = normalizeCsv("asin,grade,premium_rank,premium_score,successor_status,category_rank,premium_template_gate,premium_template_strength,premium_template_reason,premium_need_fit\nA,A,S,100,none,2500,OUT,OUT,明示理由,OUT\n", "explicit.csv");
+  assert.equal(row.premium_template_gate, "OUT");
+  assert.equal(row.premium_template_strength, "OUT");
+  assert.equal(row.premium_template_reason, "明示理由");
+  assert.equal(row.premium_need_fit, "OUT");
+  assert.deepEqual([row.grade, row.premiumRank, row.premiumScore, row.premiumNote], ["A", "S", 100, ""]);
+  assert.deepEqual(MobileCsv.premiumTemplateForRow(JSON.parse(JSON.stringify(row))), {
+    premium_template_gate: "OUT", premium_template_strength: "OUT",
+    premium_template_reason: "明示理由", premium_need_fit: "OUT",
+  });
+});
+
+test("restored legacy favorite rows are supplemented and explicit UNKNOWN or blanks survive", () => {
+  const legacy = { successorStatus: "none", categoryRank: "2,500" };
+  assert.equal(MobileCsv.premiumTemplateForRow(legacy).premium_template_strength, "STRONG");
+  assert.equal(legacy.premium_template_gate, undefined);
+  const explicit = { ...legacy, premium_template_gate: "UNKNOWN", premium_template_strength: "UNKNOWN",
+    premium_template_reason: "", premium_need_fit: "UNKNOWN" };
+  assert.equal(MobileCsv.premiumTemplateForRow(explicit).premium_template_gate, "UNKNOWN");
+  assert.equal(MobileCsv.premiumTemplateForRow(explicit).premium_template_reason, "");
+});
+
+test("favorite export includes the four source-note fields with escaped reason and preserves explicit values", () => {
+  const row = { premium_template_gate: "MATCH", premium_template_strength: "EXCEPTION",
+    premium_template_reason: '理由,"引用"\n補足', premium_need_fit: "FIT" };
+  const [header, body] = MobileCsv.parseCsv(MobileCsv.favoriteExportCsv([row]));
+  for (const [index, label] of ["元note判定", "元note強度", "元note理由", "必要性適合"].entries()) {
+    assert.equal(body.values[header.values.indexOf(label)], row[MobileCsv.PREMIUM_TEMPLATE_FIELDS[index]]);
+  }
+});
