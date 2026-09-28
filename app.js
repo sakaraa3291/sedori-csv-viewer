@@ -22,6 +22,9 @@
   const procurementFilter = document.querySelector("#procurement-filter");
   const categoryFilter = document.querySelector("#category-filter");
   const amazonStatusFilter = document.querySelector("#amazon-status-filter");
+  const sortControls = document.querySelector("#sort-controls");
+  const sortCriterion = document.querySelector("#sort-criterion");
+  const sortDirection = document.querySelector("#sort-direction");
   let loadedFiles = [];
   let favorites = {};
   let persistTimer = null;
@@ -34,7 +37,7 @@
   const DB_KEY = "current-session";
   const FAVORITES_KEY = "favorites-v1";
   const VIEW_KEY = "sedori-csv-card-view";
-  const NORMALIZER_VERSION = 4;
+  const NORMALIZER_VERSION = 5;
   const MEMO_LIMIT = 50;
 
   function openStateDb() {
@@ -161,6 +164,8 @@
         procurement: procurementFilter.value || "__ALL__",
         category: categoryFilter.value || "__ALL__",
         amazonStatus: amazonStatusFilter.value || "__ALL__",
+        sortCriterion: sortCriterion.value || "reading",
+        sortDirection: sortDirection.dataset.direction || "",
         filesExpanded,
         favoritesExpanded,
         scrollY: Math.max(0, Math.round(window.scrollY || 0)),
@@ -207,6 +212,10 @@
       loadedFiles = []; favorites = {};
     }
     viewFilter.value = view.viewMode === "favorites" ? "favorites" : "all";
+    const restoredSort = MobileCsv.normalizeSortState(view.sortCriterion, view.sortDirection);
+    sortCriterion.value = restoredSort.criterion;
+    sortDirection.dataset.direction = restoredSort.direction;
+    syncSortControls();
     renderState();
     if (Array.from(procurementFilter.options).some((option) => option.value === view.procurement)) {
       procurementFilter.value = view.procurement;
@@ -393,6 +402,27 @@
     filePanel.hidden = !filesExpanded;
   }
 
+  function syncSortControls() {
+    const criterion = sortCriterion.value;
+    if (criterion === "reading") {
+      sortDirection.dataset.direction = "";
+      sortDirection.hidden = true;
+      return;
+    }
+    const direction = sortDirection.dataset.direction === "asc" || sortDirection.dataset.direction === "desc"
+      ? sortDirection.dataset.direction : MobileCsv.SORT_DEFAULT_DIRECTIONS[criterion];
+    sortDirection.dataset.direction = direction;
+    const labels = {
+      ranking: { asc: "良い順", desc: "低い順" },
+      price: { desc: "高い順", asc: "安い順" },
+      grade: { desc: "高い順", asc: "低い順" },
+      premiumScore: { desc: "高い順", asc: "低い順" },
+    };
+    sortDirection.textContent = labels[criterion][direction];
+    sortDirection.setAttribute("aria-label", `並び順を${sortDirection.textContent}から切り替え`);
+    sortDirection.hidden = false;
+  }
+
   function render(rows, files) {
     cards.replaceChildren();
     const visibleRows = MobileCsv.filterRows(rows, procurementFilter.value, categoryFilter.value, amazonStatusFilter.value);
@@ -408,13 +438,16 @@
         : "CSVを選択してください";
     }
     const fragment = document.createDocumentFragment();
-    let rowsToRender = visibleRows;
+    let rowsToRender = MobileCsv.sortRows(visibleRows, sortCriterion.value, sortDirection.dataset.direction);
     let genreCounts = new Map();
     if (viewFilter.value === "favorites") {
       const orderedGenres = MobileCsv.categoryCounts(visibleRows, "category");
       genreCounts = new Map(orderedGenres.map((item) => [item.category, item.count]));
       rowsToRender = orderedGenres.flatMap(({ category }) =>
-        visibleRows.filter((row) => (row.category || "未分類") === category));
+        MobileCsv.sortRows(
+          visibleRows.filter((row) => (row.category || "未分類") === category),
+          sortCriterion.value,
+          sortDirection.dataset.direction));
     }
     let lastGenre = null;
     rowsToRender.forEach((row) => {
@@ -451,6 +484,9 @@
       favoriteButton.addEventListener("click", () => toggleFavorite(row));
       top.append(favoriteButton);
       body.append(top);
+      if (row.sourcePatterns) {
+        body.append(element("div", "source-patterns", `抽出元 ${row.sourcePatterns}`));
+      }
       const amazonBadge = element("div", `amazon-status amazon-${row.amazonStatus || "unknown"}`,
         row.amazonStatus === "absent" ? "Amazon不在" : row.amazonStatus === "present" ? "Amazonあり" : "Amazon不明");
       body.append(amazonBadge);
@@ -589,6 +625,8 @@
     }
     amazonStatusFilter.value = ["__ALL__", "absent", "present", "unknown"].includes(currentAmazon) ? currentAmazon : "__ALL__";
     categoryControls.hidden = loadedRows.length === 0 && favoriteList.length === 0;
+    sortControls.hidden = loadedRows.length === 0 && favoriteList.length === 0;
+    syncSortControls();
 
     const legacyAmazonFiles = loadedFiles.filter((file) => Array.isArray(file.rows) &&
       file.rows.some((row) => !Object.prototype.hasOwnProperty.call(row, "amazonStatus")));
@@ -618,6 +656,9 @@
   function reset() {
     loadedFiles = [];
     filesExpanded = false;
+    sortCriterion.value = "reading";
+    sortDirection.dataset.direction = "";
+    syncSortControls();
     input.value = "";
     renderState();
     try { localStorage.removeItem(VIEW_KEY); } catch (_) {}
@@ -650,6 +691,18 @@
     render(currentRows(), loadedFiles);
     writeViewState();
   }));
+  sortCriterion.addEventListener("change", () => {
+    sortDirection.dataset.direction = MobileCsv.SORT_DEFAULT_DIRECTIONS[sortCriterion.value] || "";
+    syncSortControls();
+    render(currentRows(), loadedFiles);
+    writeViewState();
+  });
+  sortDirection.addEventListener("click", () => {
+    sortDirection.dataset.direction = sortDirection.dataset.direction === "asc" ? "desc" : "asc";
+    syncSortControls();
+    render(currentRows(), loadedFiles);
+    writeViewState();
+  });
 
   input.addEventListener("change", async () => {
     const files = Array.from(input.files || []);
@@ -657,6 +710,10 @@
     input.disabled = true;
     loadedFiles = [];
     filesExpanded = false;
+    // A new CSV replaces the rows, but remains in the current persisted view/sort state.
+    const retainedSort = MobileCsv.normalizeSortState(sortCriterion.value, sortDirection.dataset.direction);
+    sortCriterion.value = retainedSort.criterion;
+    sortDirection.dataset.direction = retainedSort.direction;
     viewFilter.value = "all";
     procurementFilter.value = "__ALL__";
     categoryFilter.value = "__ALL__";

@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { normalizeCsv, duplicateCounts, withoutFile } = require("./csv-core.js");
+const { normalizeCsv, duplicateCounts, normalizeSortState, sortRows, withoutFile } = require("./csv-core.js");
 
 test("multiple CSV rows combine and duplicate ASINs stay present", () => {
   const first = normalizeCsv("asin,current_price_yen\nA1,1000\nA1,1200\n", "p01.csv");
@@ -20,6 +20,98 @@ test("RFC4180 quotes preserve commas, quotes, and embedded newlines", () => {
 test("category rank falls back to sales_rank", () => {
   const [row] = normalizeCsv("asin,category_rank,sales_rank\nX,,12476\n", "rank.csv");
   assert.equal(row.categoryRank, "12476");
+});
+
+test("ranking sorts ascending by default and descending on request", () => {
+  const rows = [
+    { id: "middle", categoryRank: "2,000" },
+    { id: "best", categoryRank: "150" },
+    { id: "worst", categoryRank: "12000" },
+  ];
+  assert.deepEqual(sortRows(rows, "ranking").map((row) => row.id), ["best", "middle", "worst"]);
+  assert.deepEqual(sortRows(rows, "ranking", "desc").map((row) => row.id), ["worst", "middle", "best"]);
+});
+
+test("price sorts descending by default and ascending on request", () => {
+  const rows = [
+    { id: "low", currentPriceYen: "980" },
+    { id: "high", currentPriceYen: "12,800" },
+    { id: "middle", currentPriceYen: 3500 },
+  ];
+  assert.deepEqual(sortRows(rows, "price").map((row) => row.id), ["high", "middle", "low"]);
+  assert.deepEqual(sortRows(rows, "price", "asc").map((row) => row.id), ["low", "middle", "high"]);
+});
+
+test("research priority follows S A B C D with unknown last in either direction", () => {
+  const rows = ["", "C", "unknown", "S", "D", "B", "A"].map((grade, index) => ({ grade, index }));
+  assert.deepEqual(sortRows(rows, "grade").map((row) => row.grade), ["S", "A", "B", "C", "D", "", "unknown"]);
+  assert.deepEqual(sortRows(rows, "grade", "asc").map((row) => row.grade), ["D", "C", "B", "A", "S", "", "unknown"]);
+});
+
+test("premium score sorts descending by default and ascending on request", () => {
+  const rows = [
+    { id: "middle", premiumScore: "65" },
+    { id: "high", premiumScore: 91 },
+    { id: "low", premiumScore: "12" },
+  ];
+  assert.deepEqual(sortRows(rows, "premiumScore").map((row) => row.id), ["high", "middle", "low"]);
+  assert.deepEqual(sortRows(rows, "premiumScore", "asc").map((row) => row.id), ["low", "middle", "high"]);
+});
+
+test("missing and invalid numeric values always sort last", () => {
+  const rows = [
+    { id: "blank", currentPriceYen: "" },
+    { id: "valid", currentPriceYen: "1,000" },
+    { id: "invalid", currentPriceYen: "不明" },
+    { id: "zero", currentPriceYen: "0" },
+  ];
+  assert.deepEqual(sortRows(rows, "price", "desc").map((row) => row.id), ["valid", "zero", "blank", "invalid"]);
+  assert.deepEqual(sortRows(rows, "price", "asc").map((row) => row.id), ["zero", "valid", "blank", "invalid"]);
+});
+
+test("sorting is stable and does not mutate the source array", () => {
+  const first = { id: "first", categoryRank: "100" };
+  const second = { id: "second", categoryRank: 100 };
+  const third = { id: "third", categoryRank: "200" };
+  const rows = [third, first, second];
+  const original = rows.slice();
+  const sorted = sortRows(rows, "ranking");
+  assert.deepEqual(sorted.map((row) => row.id), ["first", "second", "third"]);
+  assert.deepEqual(rows, original);
+  assert.notEqual(sorted, rows);
+  assert.equal(sorted[0], first);
+});
+
+test("reading order returns an unchanged copy", () => {
+  const rows = [{ id: 2 }, { id: 1 }];
+  const sorted = sortRows(rows, "reading", "desc");
+  assert.deepEqual(sorted, rows);
+  assert.notEqual(sorted, rows);
+});
+
+test("new CSV view policy retains valid sort state and repairs invalid persisted state", () => {
+  assert.deepEqual(normalizeSortState("price", "asc"), { criterion: "price", direction: "asc" });
+  assert.deepEqual(normalizeSortState("ranking", "broken"), { criterion: "ranking", direction: "asc" });
+  assert.deepEqual(normalizeSortState("removed-option", "desc"), { criterion: "reading", direction: "" });
+});
+
+test("source_patterns is normalized for a clear TOP50 source label", () => {
+  const [row] = normalizeCsv(
+    "asin,source_patterns,matched_pattern_ids,pattern_id,pattern_name\nA,P03 価格上昇型 / P05 Amazon本体在庫切れ型,P03|P05,P03,価格上昇型\n",
+    "top50.csv");
+  assert.equal(row.sourcePatterns, "P03 価格上昇型 / P05 Amazon本体在庫切れ型");
+});
+
+test("legacy TOP50 source falls back to matched ids and representative name", () => {
+  const [multiple] = normalizeCsv(
+    "asin,matched_pattern_ids,pattern_id,pattern_name\nA,P05|P03|P05,P03,価格上昇型\n",
+    "old-top50.csv");
+  const [single] = normalizeCsv(
+    "asin,pattern_id,pattern_name\nB,P04,価格下落・反発狙い型\n", "old-single.csv");
+  const [missing] = normalizeCsv("asin\nC\n", "unrelated.csv");
+  assert.equal(multiple.sourcePatterns, "P03 価格上昇型 / P05");
+  assert.equal(single.sourcePatterns, "P04 価格下落・反発狙い型");
+  assert.equal(missing.sourcePatterns, "");
 });
 
 test("JAN code is normalized from current and common header aliases", () => {

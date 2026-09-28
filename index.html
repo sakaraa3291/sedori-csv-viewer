@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#101827">
   <title>せどりCSVカード</title>
-  <link rel="stylesheet" href="style.css?v=20260924-13">
+  <link rel="stylesheet" href="style.css?v=20260928-1">
 </head>
 <body>
   <header>
@@ -49,6 +49,17 @@
         <option value="unknown">不明</option>
       </select>
     </div>
+    <div id="sort-controls" hidden>
+      <label for="sort-criterion">並び順</label>
+      <select id="sort-criterion" aria-label="並び替えの基準">
+        <option value="reading">読み込み順</option>
+        <option value="ranking">ランキング</option>
+        <option value="price">金額</option>
+        <option value="grade">リサーチ優先度</option>
+        <option value="premiumScore">プレミアスコア</option>
+      </select>
+      <button id="sort-direction" type="button" hidden></button>
+    </div>
     <div id="file-controls" hidden>
       <button id="file-toggle" type="button" aria-expanded="false" aria-controls="file-panel">
         <span id="file-toggle-label">選択中CSV</span><span class="file-toggle-mark" aria-hidden="true">▼</span>
@@ -61,7 +72,7 @@
     <ul id="errors" class="errors" aria-live="assertive"></ul>
   </header>
   <main id="cards"></main>
-  <script src="csv-core.js?v=20260924-13"></script>
-  <script src="app.js?v=20260924-13"></script>
+  <script src="csv-core.js?v=20260928-1"></script>
+  <script src="app.js?v=20260928-1"></script>
 </body>
 </html>

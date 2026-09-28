@@ -378,12 +378,32 @@
       const explicitStores = (raw.recommended_stores || raw["推奨仕入れ店舗"] || raw["仕入れ店舗候補"] || "").trim();
       const amazonStatus = amazonStatusFromRaw(raw);
       const categoryRank = ((raw.category_rank || "").trim() || (raw.sales_rank || "").trim());
+      let sourcePatterns = (raw.source_patterns || "").trim();
+      if (!sourcePatterns) {
+        const representativeId = (raw.pattern_id || "").trim();
+        const representativeName = (raw.pattern_name || "").trim();
+        const ids = (raw.matched_pattern_ids || "").split("|").map(value => value.trim()).filter(Boolean);
+        if (representativeId && !ids.includes(representativeId)) ids.push(representativeId);
+        ids.sort((a, b) => {
+          const pa = /^P(\d+)$/.exec(a);
+          const pb = /^P(\d+)$/.exec(b);
+          if (pa && pb) return Number(pa[1]) - Number(pb[1]);
+          if (pa) return -1;
+          if (pb) return 1;
+          return a.localeCompare(b);
+        });
+        sourcePatterns = [...new Set(ids)].map(id =>
+          id === representativeId && representativeName ? `${id} ${representativeName}` : id
+        ).join(" / ");
+        if (!sourcePatterns && representativeName) sourcePatterns = representativeName;
+      }
       const premium = premiumPotentialFromRaw(raw, categoryRank);
       rows.push({
         asin,
         jan,
         currentPriceYen: (raw.current_price_yen || "").trim(),
         categoryRank,
+        sourcePatterns,
         grade: (raw.grade || "").trim().toUpperCase(),
         title: (raw.title || "").trim(),
         category,
@@ -444,6 +464,53 @@
         (row.amazonStatus || "unknown") === amazonStatus;
       return procurementOk && categoryOk && amazonOk;
     });
+  }
+
+  const SORT_DEFAULT_DIRECTIONS = {
+    ranking: "asc",
+    price: "desc",
+    grade: "desc",
+    premiumScore: "desc",
+  };
+
+  function normalizeSortState(criterion = "reading", direction) {
+    const chosenCriterion = Object.prototype.hasOwnProperty.call(SORT_DEFAULT_DIRECTIONS, criterion)
+      ? criterion : "reading";
+    if (chosenCriterion === "reading") return { criterion: "reading", direction: "" };
+    return {
+      criterion: chosenCriterion,
+      direction: direction === "asc" || direction === "desc"
+        ? direction : SORT_DEFAULT_DIRECTIONS[chosenCriterion],
+    };
+  }
+
+  function sortRows(rows, criterion = "reading", direction) {
+    const source = Array.isArray(rows) ? rows : [];
+    const sortState = normalizeSortState(criterion, direction);
+    if (sortState.criterion === "reading") return source.slice();
+    const gradeOrder = { S: 5, A: 4, B: 3, C: 2, D: 1 };
+    const numericField = {
+      ranking: "categoryRank",
+      price: "currentPriceYen",
+      premiumScore: "premiumScore",
+    }[sortState.criterion];
+    const sortable = source.map((row, index) => {
+      let value = null;
+      if (sortState.criterion === "grade") {
+        value = gradeOrder[String((row || {}).grade || "").trim().toUpperCase()] ?? null;
+      } else {
+        value = finiteNumber((row || {})[numericField]);
+      }
+      return { row, index, value };
+    });
+    sortable.sort((a, b) => {
+      if (a.value === null && b.value === null) return a.index - b.index;
+      if (a.value === null) return 1;
+      if (b.value === null) return -1;
+      const compared = sortState.direction === "asc" ? a.value - b.value : b.value - a.value;
+      return compared || a.index - b.index;
+    });
+    return sortable.map((item) => item.row);
   }
 
   function amazonStatusCounts(rows) {
@@ -515,5 +582,5 @@
     return files.filter((file) => file.id !== fileId);
   }
 
-  return { PREMIUM_TEMPLATE_FIELDS, calculatePremiumTemplate, premiumTemplateForRow, CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, calculatePremiumPotential, premiumPotentialFromRaw, favoriteKey, normalizeMemo, favoriteExportCsv, withoutFile };
+  return { PREMIUM_TEMPLATE_FIELDS, SORT_DEFAULT_DIRECTIONS, normalizeSortState, calculatePremiumTemplate, premiumTemplateForRow, CsvError, parseCsv, normalizeCsv, duplicateCounts, categoryCounts, filterRows, sortRows, filterByCategory, procurementCategory, recommendedStores, amazonStatusCounts, calculatePremiumPotential, premiumPotentialFromRaw, favoriteKey, normalizeMemo, favoriteExportCsv, withoutFile };
 });
